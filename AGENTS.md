@@ -12,6 +12,15 @@ Memos is a self-hosted note-taking app.
 - Storage: SQLite, MySQL, PostgreSQL.
 - Generated API outputs: `proto/gen/` for Go/OpenAPI, `web/src/types/proto/` for TypeScript.
 
+## Documentation Map
+
+- `ARCHITECTURE.md` is the top-level system map.
+- `docs/README.md` indexes canonical engineering context.
+- `docs/DESIGN.md`, `docs/DATA.md`, and `docs/SECURITY.md` define cross-cutting contracts.
+- `docs/design-docs/` contains approved subsystem designs.
+- `docs/PLANS.md` and `docs/exec-plans/` own current execution status.
+- Existing `docs/plans/` and `docs/superpowers/` files are historical records; do not infer active status from location alone.
+
 ## Working Rules
 
 - Read relevant code before editing; prefer local patterns over new abstractions.
@@ -49,6 +58,9 @@ cd web && pnpm release             # Build SPA into server/router/frontend/dist
 cd proto && buf generate           # Regenerate Go + TypeScript + OpenAPI
 cd proto && buf lint               # Lint proto files
 cd proto && buf format -w          # Format proto files
+
+# Documentation
+python3 scripts/validate_docs.py    # Validate Harness structure and internal links
 ```
 
 ## Code Map

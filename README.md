@@ -63,6 +63,8 @@ Contributions are welcome — bug reports, feature suggestions, pull requests, d
 - [Improve documentation](https://github.com/usememos/dotcom)
 - [Help with translations](https://github.com/usememos/memos/tree/main/web/src/locales)
 
+For repository development, start with the [agent working map](AGENTS.md), [architecture map](ARCHITECTURE.md), and [engineering documentation index](docs/README.md). The approved [AI-native architecture](docs/design-docs/ai-native-notes.md) guides the in-product Chat, search, and Agent initiative.
+
 ## Sponsors
 * [**CodeRabbit** - Cut code review time & bugs in half, instantly](https://coderabbit.link/usememos)
 * [**SSD Nodes** - Affordable VPS hosting for self-hosters](https://ssdnodes.com/?utm_source=memos&utm_medium=sponsor)

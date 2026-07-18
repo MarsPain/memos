@@ -31,3 +31,7 @@ dist
 
 # Frontend test coverage output (Vitest + @vitest/coverage-v8).
 web/coverage/
+
+# Python validation caches.
+__pycache__/
+*.py[cod]

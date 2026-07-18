@@ -1,0 +1,39 @@
+name: Documentation Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "README.md"
+      - "AGENTS.md"
+      - "ARCHITECTURE.md"
+      - "SECURITY.md"
+      - "docs/**"
+      - "scripts/validate_docs.py"
+      - "tests/test_docs_validation.py"
+  pull_request:
+    branches: [main]
+    paths:
+      - "README.md"
+      - "AGENTS.md"
+      - "ARCHITECTURE.md"
+      - "SECURITY.md"
+      - "docs/**"
+      - "scripts/validate_docs.py"
+      - "tests/test_docs_validation.py"
+
+jobs:
+  docs:
+    name: Validate Harness Context
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Validate documentation
+        run: python3 -m unittest tests.test_docs_validation
