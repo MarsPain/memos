@@ -2,6 +2,7 @@
 
 **Status:** Approved
 **Architecture:** [AI-Native Memos Architecture](../design-docs/ai-native-notes.md)
+**Delivery specifications:** [Stage 1 — AI Foundation](ai-foundation.md)
 
 ## User Outcomes
 

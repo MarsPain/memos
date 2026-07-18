@@ -1,14 +1,14 @@
 # AI-Native Memos Architecture
 
-- **Status:** Approved design; implementation not started
+- **Status:** Approved target design
 - **Approved:** 2026-07-18
 - **Last reviewed:** 2026-07-18
 - **Canonical scope:** In-product Chat, hybrid search, and confirmation-gated Agent creation/update
 
 This document owns subsystem architecture and cross-module invariants. Detailed data lifecycle rules live in
 [`docs/DATA.md`](../DATA.md), security and provider-egress rules in [`docs/SECURITY.md`](../SECURITY.md), user-visible behavior in the
-[product specification](../product-specs/ai-native-notes.md), and delivery gates in the [roadmap](../ROADMAP.md) and
-[execution plans](../PLANS.md).
+[product specification](../product-specs/ai-native-notes.md), and delivery gates in the [roadmap](../ROADMAP.md). The
+[configured issue tracker](../agents/issue-tracker.md) owns implementation status and dependencies.
 
 ## 1. Decision Summary
 
@@ -255,7 +255,7 @@ Structured filters such as tags, time, visibility, creator, and Memo properties 
 Each query has hard limits for normalized query size, lexical and semantic scan bytes, candidates per path, elapsed time, final results, and provider
 context. Retrieval reads in bounded batches and does not load an unbounded corpus or vector set into memory. When a budget is exhausted, the response
 marks itself partial or degraded with a machine-readable reason; it never presents incomplete semantic coverage as a complete result. Concrete safe
-defaults and benchmark evidence belong to the Stage 2 and Stage 3 execution plans.
+defaults and benchmark evidence belong to change-scoped specs and linked issues for Stages 2 and 3.
 
 The baseline semantic path is a complete scan of the active generation within its declared support envelope. If that scan cannot finish inside its
 budget, Retrieval discards the incomplete semantic candidate set and returns lexical results with `SEMANTIC_BUDGET_EXCEEDED`; it does not rank an
@@ -366,7 +366,8 @@ The detailed rules live in [`docs/SECURITY.md`](../SECURITY.md). Architectural i
 
 ## 12. API and Frontend Direction
 
-`AIService` gains authenticated operations for conversations, messages/streaming Chat, unified search, proposals, apply/dismiss, and index status. Exact RPC granularity belongs in the Stage 1 and Stage 2 execution designs; public methods should reflect user operations rather than provider transports.
+`AIService` gains authenticated operations for conversations, messages/streaming Chat, unified search, proposals, apply/dismiss, and index status. Exact
+RPC granularity belongs in the change-scoped specs for Stages 1 and 2; public methods should reflect user operations rather than provider transports.
 
 Mutation-like RPCs carry idempotency keys. Search responses expose complete/partial/degraded state. Index status distinguishes the active and building
 generations and reports whether semantic retrieval is currently callable.
@@ -447,4 +448,5 @@ Implementation is intentionally staged:
 3. versioned corpus projection, portable embedding generations, and hybrid retrieval;
 4. shared Memo mutation seam and transactional confirmation-gated create/update proposals.
 
-Each stage has a separate execution plan and must satisfy its go/no-go criteria before the next stage becomes active.
+Each stage is delivered through a change-scoped product spec and linked implementation issues. The issue tracker owns eligibility and state; the
+go/no-go criteria remain canonical in the roadmap.

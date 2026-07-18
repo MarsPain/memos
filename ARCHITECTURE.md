@@ -51,5 +51,5 @@ Read the canonical [AI-native architecture design](docs/design-docs/ai-native-no
 - [Frontend state and UI rules](docs/FRONTEND.md)
 - [Data ownership and migration rules](docs/DATA.md)
 - [Security and trust boundaries](docs/SECURITY.md)
-- [Execution plan index](docs/PLANS.md)
+- [Historical plan index](docs/PLANS.md)
 - [Roadmap](docs/ROADMAP.md)

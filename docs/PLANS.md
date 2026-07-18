@@ -1,31 +1,14 @@
-# Execution Plans
+# Historical Plan Index
 
-## Lifecycle
+This page is navigation for plan formats that predate the repository's current context protocol. It does not own work status, dependencies,
+assignment, or technical debt. Those belong only to the [configured issue tracker](agents/issue-tracker.md).
 
-- `active/`: approved work currently eligible for implementation.
-- `completed/`: accepted work with a completion date and verification record.
-- `tech-debt/`: acknowledged gaps with impact and a target stage.
+## Historical Collections
 
-Only one plan should be the default next implementation target. Moving a plan between buckets requires updating this index in the same change.
+- [`docs/plans/`](plans/) contains earlier feature definitions, designs, and implementation records.
+- [`docs/superpowers/plans/`](superpowers/plans/) and [`docs/superpowers/specs/`](superpowers/specs/) contain historical workflow artifacts.
+- Former `docs/exec-plans/` records, when present in repository history or retained for compatibility, are legacy snapshots rather than an active
+  lifecycle.
 
-## Active
-
-| Plan | Status | Outcome |
-| --- | --- | --- |
-| [0001 — AI foundation](exec-plans/active/0001-ai-foundation.md) | Ready | Capability configuration and provider-neutral generation/embedding seams |
-
-## Completed
-
-| Plan | Completed | Outcome |
-| --- | --- | --- |
-| [0000 — Harness context foundation](exec-plans/completed/0000-harness-context-foundation.md) | 2026-07-18 | Canonical context maps, AI architecture, plan lifecycle, and docs validation |
-
-## Tech Debt
-
-| Item | Target |
-| --- | --- |
-| [0001 — Legacy plan indexing](exec-plans/tech-debt/0001-legacy-plan-indexing.md) | Before broad documentation migration |
-
-## Historical Plans
-
-Earlier feature records remain under [`docs/plans/`](plans/) and [`docs/superpowers/plans/`](superpowers/plans/). They are historical references, not active status declarations.
+Do not create new active/completed/tech-debt plan buckets. New work starts from a canonical [product specification](product-specs/) and linked Local
+Markdown issues under `.scratch/`.

@@ -1,6 +1,6 @@
 # Configuration Provisioning
 
-Status: Implemented
+**Design scope:** Current implementation
 
 ## Summary
 

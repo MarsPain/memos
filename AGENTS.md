@@ -14,12 +14,17 @@ Memos is a self-hosted note-taking app.
 
 ## Documentation Map
 
-- `ARCHITECTURE.md` is the top-level system map.
-- `docs/README.md` indexes canonical engineering context.
-- `docs/DESIGN.md`, `docs/DATA.md`, and `docs/SECURITY.md` define cross-cutting contracts.
-- `docs/design-docs/` contains approved subsystem designs.
-- `docs/PLANS.md` and `docs/exec-plans/` own current execution status.
-- Existing `docs/plans/` and `docs/superpowers/` files are historical records; do not infer active status from location alone.
+- [ARCHITECTURE.md](ARCHITECTURE.md) is the top-level system map.
+- [docs/README.md](docs/README.md) indexes canonical engineering context.
+- `docs/DESIGN.md`, `docs/DATA.md`, and `docs/SECURITY.md` define cross-cutting contracts; `docs/design-docs/` contains subsystem designs.
+- The configured issue tracker owns work state, dependencies, assignment, and technical debt.
+- `docs/PLANS.md`, `docs/plans/`, and `docs/superpowers/` are historical records; do not infer active status from their location.
+
+## Agent skills
+
+- [Issue tracker](docs/agents/issue-tracker.md): local Markdown issues under `.scratch/`.
+- [Triage labels](docs/agents/triage-labels.md): mappings for the five canonical triage roles.
+- [Domain docs](docs/agents/domain.md): lazy discovery rules for `CONTEXT.md`, context maps, and ADRs.
 
 ## Working Rules
 
@@ -128,10 +133,3 @@ python3 scripts/validate_docs.py    # Validate Harness structure and internal li
 - Before finishing, run the checks that match the changed surface from "Change Routing".
 - For docs-only changes, `git diff --check` is sufficient unless the docs include runnable examples that should be tested.
 - If a required check cannot run locally, report the reason and the exact command that remains.
-
-## CI Reference
-
-- Backend CI: Go 1.26.2, `go mod tidy -go=1.26.2`, golangci-lint v2.11.3, test groups `store`, `server`, `internal`, `other`.
-- Frontend CI: Node 24, pnpm 11.0.1, `pnpm lint`, `pnpm test`, `pnpm build`.
-- Proto CI: `buf lint` and `buf format` check.
-- Docker: `scripts/Dockerfile`, Alpine 3.21 runtime, non-root user, port 5230, multi-arch amd64/arm64/arm/v7.

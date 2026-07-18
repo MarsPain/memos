@@ -1,15 +1,16 @@
 # AI-Native Roadmap
 
-The roadmap defines capability order and go/no-go criteria. Task-level work belongs in [execution plans](PLANS.md).
+The roadmap defines capability order and go/no-go criteria. The [configured issue tracker](agents/issue-tracker.md) owns task-level status and
+dependencies.
 
 ## Stage 0: Harness and Architecture
-
-Status: complete.
 
 - Establish canonical context documents and validation.
 - Approve the AI module, product boundary, data ownership, and MCP non-interference rule.
 
 ## Stage 1: Model Foundation
+
+[Delivery specification](product-specs/ai-foundation.md)
 
 - Add generation and embedding capability configuration alongside transcription.
 - Introduce provider-neutral generation and embedding interfaces.
