@@ -280,8 +280,12 @@ func convertInstanceAISettingFromStore(setting *storepb.InstanceAISetting) *v1pb
 	}
 
 	aiSetting := &v1pb.InstanceSetting_AISetting{
-		Providers:     make([]*v1pb.InstanceSetting_AIProviderConfig, 0, len(setting.Providers)),
-		Transcription: convertTranscriptionConfigFromStore(setting.GetTranscription()),
+		Providers:                      make([]*v1pb.InstanceSetting_AIProviderConfig, 0, len(setting.Providers)),
+		Transcription:                  convertTranscriptionConfigFromStore(setting.GetTranscription()),
+		Generation:                     convertGenerationConfigFromStore(setting.GetGeneration()),
+		Embedding:                      convertEmbeddingConfigFromStore(setting.GetEmbedding()),
+		ExternalProcessingAcknowledged: setting.GetExternalProcessingAcknowledged(),
+		Readiness:                      convertCapabilityReadinessFromStore(setting.GetReadiness()),
 	}
 	for _, provider := range setting.Providers {
 		if provider == nil {
@@ -289,12 +293,13 @@ func convertInstanceAISettingFromStore(setting *storepb.InstanceAISetting) *v1pb
 		}
 		apiKey := provider.GetApiKey()
 		aiSetting.Providers = append(aiSetting.Providers, &v1pb.InstanceSetting_AIProviderConfig{
-			Id:         provider.GetId(),
-			Title:      provider.GetTitle(),
-			Type:       v1pb.InstanceSetting_AIProviderType(provider.GetType()),
-			Endpoint:   provider.GetEndpoint(),
-			ApiKeySet:  apiKey != "",
-			ApiKeyHint: maskAPIKey(apiKey),
+			Id:                  provider.GetId(),
+			Title:               provider.GetTitle(),
+			Type:                v1pb.InstanceSetting_AIProviderType(provider.GetType()),
+			Endpoint:            provider.GetEndpoint(),
+			AllowPrivateNetwork: provider.GetAllowPrivateNetwork(),
+			ApiKeySet:           apiKey != "",
+			ApiKeyHint:          maskAPIKey(apiKey),
 		})
 	}
 	return aiSetting
@@ -306,22 +311,80 @@ func convertInstanceAISettingToStore(setting *v1pb.InstanceSetting_AISetting) *s
 	}
 
 	aiSetting := &storepb.InstanceAISetting{
-		Providers:     make([]*storepb.AIProviderConfig, 0, len(setting.Providers)),
-		Transcription: convertTranscriptionConfigToStore(setting.GetTranscription()),
+		Providers:                      make([]*storepb.AIProviderConfig, 0, len(setting.Providers)),
+		Transcription:                  convertTranscriptionConfigToStore(setting.GetTranscription()),
+		Generation:                     convertGenerationConfigToStore(setting.GetGeneration()),
+		Embedding:                      convertEmbeddingConfigToStore(setting.GetEmbedding()),
+		ExternalProcessingAcknowledged: setting.GetExternalProcessingAcknowledged(),
+		Readiness:                      convertCapabilityReadinessToStore(setting.GetReadiness()),
 	}
 	for _, provider := range setting.Providers {
 		if provider == nil {
 			continue
 		}
 		aiSetting.Providers = append(aiSetting.Providers, &storepb.AIProviderConfig{
-			Id:       provider.GetId(),
-			Title:    provider.GetTitle(),
-			Type:     storepb.AIProviderType(provider.GetType()),
-			Endpoint: provider.GetEndpoint(),
-			ApiKey:   provider.GetApiKey(),
+			Id:                             provider.GetId(),
+			Title:                          provider.GetTitle(),
+			Type:                           storepb.AIProviderType(provider.GetType()),
+			Endpoint:                       provider.GetEndpoint(),
+			ApiKey:                         provider.GetApiKey(),
+			AllowPrivateNetwork:            provider.GetAllowPrivateNetwork(),
+			PrivateNetworkPolicyConfigured: true,
 		})
 	}
 	return aiSetting
+}
+
+func convertGenerationConfigFromStore(setting *storepb.GenerationConfig) *v1pb.InstanceSetting_GenerationConfig {
+	if setting == nil {
+		return nil
+	}
+	return &v1pb.InstanceSetting_GenerationConfig{ProviderId: setting.GetProviderId(), Model: setting.GetModel()}
+}
+
+func convertGenerationConfigToStore(setting *v1pb.InstanceSetting_GenerationConfig) *storepb.GenerationConfig {
+	if setting == nil {
+		return nil
+	}
+	return &storepb.GenerationConfig{ProviderId: setting.GetProviderId(), Model: setting.GetModel()}
+}
+
+func convertEmbeddingConfigFromStore(setting *storepb.EmbeddingConfig) *v1pb.InstanceSetting_EmbeddingConfig {
+	if setting == nil {
+		return nil
+	}
+	return &v1pb.InstanceSetting_EmbeddingConfig{ProviderId: setting.GetProviderId(), Model: setting.GetModel(), Dimensions: setting.GetDimensions()}
+}
+
+func convertEmbeddingConfigToStore(setting *v1pb.InstanceSetting_EmbeddingConfig) *storepb.EmbeddingConfig {
+	if setting == nil {
+		return nil
+	}
+	return &storepb.EmbeddingConfig{ProviderId: setting.GetProviderId(), Model: setting.GetModel(), Dimensions: setting.GetDimensions()}
+}
+
+func convertCapabilityReadinessFromStore(readiness *storepb.CapabilityReadiness) *v1pb.InstanceSetting_CapabilityReadiness {
+	if readiness == nil {
+		return nil
+	}
+	return &v1pb.InstanceSetting_CapabilityReadiness{
+		TextGeneration:  v1pb.InstanceSetting_CapabilityState(readiness.GetTextGeneration()),
+		Streaming:       v1pb.InstanceSetting_CapabilityState(readiness.GetStreaming()),
+		StructuredTools: v1pb.InstanceSetting_CapabilityState(readiness.GetStructuredTools()),
+		Embeddings:      v1pb.InstanceSetting_CapabilityState(readiness.GetEmbeddings()),
+	}
+}
+
+func convertCapabilityReadinessToStore(readiness *v1pb.InstanceSetting_CapabilityReadiness) *storepb.CapabilityReadiness {
+	if readiness == nil {
+		return nil
+	}
+	return &storepb.CapabilityReadiness{
+		TextGeneration:  storepb.CapabilityState(readiness.GetTextGeneration()),
+		Streaming:       storepb.CapabilityState(readiness.GetStreaming()),
+		StructuredTools: storepb.CapabilityState(readiness.GetStructuredTools()),
+		Embeddings:      storepb.CapabilityState(readiness.GetEmbeddings()),
+	}
 }
 
 func convertTranscriptionConfigFromStore(setting *storepb.TranscriptionConfig) *v1pb.InstanceSetting_TranscriptionConfig {

@@ -159,6 +159,18 @@ message InstanceAISetting {
   // transcription is the speech-to-text feature configuration.
   // When unset or transcription.provider_id is empty, transcription is disabled.
   TranscriptionConfig transcription = 2;
+
+  // generation assigns the instance-wide text-generation capability.
+  GenerationConfig generation = 3;
+
+  // embedding assigns the instance-wide embedding capability.
+  EmbeddingConfig embedding = 4;
+
+  // external_processing_acknowledged records the administrator disclosure acknowledgement.
+  bool external_processing_acknowledged = 5;
+
+  // readiness records the last bounded validation result for each capability.
+  CapabilityReadiness readiness = 6;
 }
 
 message AIProviderConfig {
@@ -168,6 +180,10 @@ message AIProviderConfig {
   string endpoint = 4;
   // api_key is write-only at the API layer and is required by the server to call providers.
   string api_key = 5;
+  // allow_private_network explicitly authorizes this provider to reach private destinations.
+  bool allow_private_network = 6;
+  // private_network_policy_configured distinguishes legacy stored endpoints from new explicit policy.
+  bool private_network_policy_configured = 7;
 }
 
 enum AIProviderType {
@@ -202,4 +218,33 @@ message TranscriptionConfig {
   // may ignore) and folded into the Gemini generation prompt as a "Context and
   // spelling hints" block (which the LLM will treat more literally).
   string prompt = 4;
+}
+
+// GenerationConfig assigns a provider and model for text generation.
+message GenerationConfig {
+  string provider_id = 1;
+  string model = 2;
+}
+
+// EmbeddingConfig assigns a provider and model for embeddings.
+message EmbeddingConfig {
+  string provider_id = 1;
+  string model = 2;
+  int32 dimensions = 3;
+}
+
+// CapabilityReadiness is the last independently validated capability state.
+message CapabilityReadiness {
+  CapabilityState text_generation = 1;
+  CapabilityState streaming = 2;
+  CapabilityState structured_tools = 3;
+  CapabilityState embeddings = 4;
+}
+
+enum CapabilityState {
+  CAPABILITY_STATE_UNSPECIFIED = 0;
+  NOT_CONFIGURED = 1;
+  UNVALIDATED = 2;
+  READY = 3;
+  UNAVAILABLE = 4;
 }

@@ -235,7 +235,9 @@ func TestLoadDeploymentConfigurationSupportsEveryProvisionableSettingGroup(t *te
 			Key: storepb.InstanceSettingKey_AI,
 			Value: &storepb.InstanceSetting_AiSetting{AiSetting: &storepb.InstanceAISetting{Providers: []*storepb.AIProviderConfig{
 				{Id: "primary", Title: "Primary", Type: storepb.AIProviderType_OPENAI, ApiKey: "ai-secret"},
-			}}},
+			}, Generation: &storepb.GenerationConfig{ProviderId: "primary", Model: "chat-model"},
+				Embedding:                      &storepb.EmbeddingConfig{ProviderId: "primary", Model: "embed-model", Dimensions: 768},
+				ExternalProcessingAcknowledged: true}},
 		},
 	}
 	for filename, setting := range settings {
@@ -249,6 +251,8 @@ func TestLoadDeploymentConfigurationSupportsEveryProvisionableSettingGroup(t *te
 	require.NoError(t, err)
 	require.Len(t, ai.Providers, 1)
 	assert.Equal(t, "https://api.openai.com/v1", ai.Providers[0].Endpoint)
+	assert.Equal(t, "chat-model", ai.GetGeneration().GetModel())
+	assert.Equal(t, int32(768), ai.GetEmbedding().GetDimensions())
 }
 
 func TestLoadDeploymentConfigurationRejectsInvalidSettingResources(t *testing.T) {

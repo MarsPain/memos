@@ -110,6 +110,11 @@ does not prove that an arbitrary model supports streaming, embeddings, or struct
 use text generation without tool support; the Agent remains disabled unless structured tool requests pass validation. HTTP clients, timeouts, and
 limits are injected for tests.
 
+Stage 1 implements this boundary as `ai.Model`, explicit request/response/event types, and embedding-shape validation under `internal/ai`.
+`internal/ai/gateway` owns adapter selection; OpenAI-compatible and Gemini wire code lives below `internal/ai/provider/`; deterministic consumer fakes
+live in `internal/ai/aitest`. The Instance service's admin-only capability probe uses the same resolver and hardened client as runtime calls, persists
+matching readiness results, and returns only normalized safe categories.
+
 ### 4.3 Shared Memo Application Module
 
 Current Memo authorization, validation, Markdown payload construction, and post-write side effects live in API v1 handlers. Before AI code depends on

@@ -2,7 +2,7 @@
 
 Parent spec: [AI Foundation](../../../docs/product-specs/ai-foundation.md)
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 02, 05, 06
 
 ## Outcome
@@ -32,4 +32,4 @@ Run every command under the parent spec's **System Verification** section, then 
 
 ## Comments
 
-No comments yet.
+Wired the provider-neutral model factory into API composition, updated canonical docs, passed the parent system verification and Store suite, and confirmed no diff under server/router/mcp/.

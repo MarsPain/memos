@@ -2,7 +2,7 @@
 
 Parent spec: [AI Foundation](../../../docs/product-specs/ai-foundation.md)
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 01
 
 ## Outcome
@@ -33,4 +33,4 @@ oversized bodies, and explicit private access. Run `go test -v -race ./internal/
 
 ## Comments
 
-No comments yet.
+Implemented the shared cancellable transport with URL/DNS/redirect policy, explicit private access, request/response/time/retry bounds, cancellation, and sanitized error categories; transcription uses the same default client.

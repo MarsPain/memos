@@ -2,7 +2,7 @@
 
 Parent spec: [AI Foundation](../../../docs/product-specs/ai-foundation.md)
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 01, 02, 05
 
 ## Outcome
@@ -37,4 +37,4 @@ Manually verify disclosure, private-endpoint opt-in, sanitized test errors, mask
 
 ## Comments
 
-No comments yet.
+Implemented additive Generation and Embedding settings, disclosure acknowledgement, private-network opt-in, independent readiness/tests, write-only keys, and public external-processing disclosure while preserving transcription controls.

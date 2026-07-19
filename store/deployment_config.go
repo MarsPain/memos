@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/usememos/memos/internal/ai"
 	"github.com/usememos/memos/internal/base"
 	storepb "github.com/usememos/memos/proto/gen/store"
 )
@@ -315,6 +316,10 @@ func normalizeDeploymentAISetting(setting *storepb.InstanceAISetting) error {
 		default:
 			return errors.Errorf("aiSetting provider %q has unsupported type", provider.Id)
 		}
+		if _, err := ai.ValidateEndpoint(provider.Endpoint, provider.AllowPrivateNetwork); err != nil {
+			return errors.Wrapf(err, "aiSetting provider %q endpoint", provider.Id)
+		}
+		provider.PrivateNetworkPolicyConfigured = true
 	}
 	if transcription := setting.Transcription; transcription != nil {
 		transcription.ProviderId = strings.TrimSpace(transcription.ProviderId)
@@ -328,6 +333,41 @@ func normalizeDeploymentAISetting(setting *storepb.InstanceAISetting) error {
 		}
 		if len(transcription.Model) > maxTranscriptionModelLength || len(transcription.Language) > maxTranscriptionLanguageLength || len(transcription.Prompt) > maxTranscriptionPromptLength {
 			return errors.New("aiSetting transcription configuration exceeds a supported length limit")
+		}
+	}
+	validateAssignment := func(name, providerID, model string) error {
+		if providerID == "" && model == "" {
+			return nil
+		}
+		if providerID == "" || model == "" {
+			return errors.Errorf("aiSetting %s requires providerId and model", name)
+		}
+		if _, ok := providers[providerID]; !ok {
+			return errors.Errorf("aiSetting %s providerId %q does not reference a provider", name, providerID)
+		}
+		if len(model) > maxTranscriptionModelLength {
+			return errors.Errorf("aiSetting %s model exceeds the supported length limit", name)
+		}
+		return nil
+	}
+	if generation := setting.Generation; generation != nil {
+		generation.ProviderId = strings.TrimSpace(generation.ProviderId)
+		generation.Model = strings.TrimSpace(generation.Model)
+		if err := validateAssignment("generation", generation.ProviderId, generation.Model); err != nil {
+			return err
+		}
+	}
+	if embedding := setting.Embedding; embedding != nil {
+		embedding.ProviderId = strings.TrimSpace(embedding.ProviderId)
+		embedding.Model = strings.TrimSpace(embedding.Model)
+		if err := validateAssignment("embedding", embedding.ProviderId, embedding.Model); err != nil {
+			return err
+		}
+		if embedding.Dimensions < 0 || embedding.Dimensions > 65536 {
+			return errors.New("aiSetting embedding dimensions must be between 1 and 65536 when specified")
+		}
+		if embedding.ProviderId != "" && !setting.ExternalProcessingAcknowledged {
+			return errors.New("aiSetting externalProcessingAcknowledged is required before assigning embeddings")
 		}
 	}
 	return nil

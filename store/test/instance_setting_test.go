@@ -371,6 +371,30 @@ func TestInstanceSettingAISetting(t *testing.T) {
 	ts.Close()
 }
 
+func TestInstanceSettingMigratesLegacyCustomTranscriptionEndpointPolicy(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	ts := NewTestingStore(ctx, t)
+	defer ts.Close()
+
+	_, err := ts.UpsertInstanceSetting(ctx, &storepb.InstanceSetting{
+		Key: storepb.InstanceSettingKey_AI,
+		Value: &storepb.InstanceSetting_AiSetting{AiSetting: &storepb.InstanceAISetting{
+			Providers: []*storepb.AIProviderConfig{{
+				Id: "legacy", Title: "Legacy", Type: storepb.AIProviderType_OPENAI,
+				Endpoint: "http://127.0.0.1:8080/v1", ApiKey: "secret",
+			}},
+			Transcription: &storepb.TranscriptionConfig{ProviderId: "legacy", Model: "whisper-1"},
+		}},
+	})
+	require.NoError(t, err)
+
+	setting, err := ts.GetInstanceAISetting(ctx)
+	require.NoError(t, err)
+	require.True(t, setting.GetProviders()[0].GetAllowPrivateNetwork())
+	require.True(t, setting.GetProviders()[0].GetPrivateNetworkPolicyConfigured())
+}
+
 func TestInstanceSettingListAll(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

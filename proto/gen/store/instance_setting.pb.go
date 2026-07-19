@@ -142,6 +142,61 @@ func (AIProviderType) EnumDescriptor() ([]byte, []int) {
 	return file_store_instance_setting_proto_rawDescGZIP(), []int{1}
 }
 
+type CapabilityState int32
+
+const (
+	CapabilityState_CAPABILITY_STATE_UNSPECIFIED CapabilityState = 0
+	CapabilityState_NOT_CONFIGURED               CapabilityState = 1
+	CapabilityState_UNVALIDATED                  CapabilityState = 2
+	CapabilityState_READY                        CapabilityState = 3
+	CapabilityState_UNAVAILABLE                  CapabilityState = 4
+)
+
+// Enum value maps for CapabilityState.
+var (
+	CapabilityState_name = map[int32]string{
+		0: "CAPABILITY_STATE_UNSPECIFIED",
+		1: "NOT_CONFIGURED",
+		2: "UNVALIDATED",
+		3: "READY",
+		4: "UNAVAILABLE",
+	}
+	CapabilityState_value = map[string]int32{
+		"CAPABILITY_STATE_UNSPECIFIED": 0,
+		"NOT_CONFIGURED":               1,
+		"UNVALIDATED":                  2,
+		"READY":                        3,
+		"UNAVAILABLE":                  4,
+	}
+)
+
+func (x CapabilityState) Enum() *CapabilityState {
+	p := new(CapabilityState)
+	*p = x
+	return p
+}
+
+func (x CapabilityState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (CapabilityState) Descriptor() protoreflect.EnumDescriptor {
+	return file_store_instance_setting_proto_enumTypes[2].Descriptor()
+}
+
+func (CapabilityState) Type() protoreflect.EnumType {
+	return &file_store_instance_setting_proto_enumTypes[2]
+}
+
+func (x CapabilityState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use CapabilityState.Descriptor instead.
+func (CapabilityState) EnumDescriptor() ([]byte, []int) {
+	return file_store_instance_setting_proto_rawDescGZIP(), []int{2}
+}
+
 type InstanceStorageSetting_StorageType int32
 
 const (
@@ -181,11 +236,11 @@ func (x InstanceStorageSetting_StorageType) String() string {
 }
 
 func (InstanceStorageSetting_StorageType) Descriptor() protoreflect.EnumDescriptor {
-	return file_store_instance_setting_proto_enumTypes[2].Descriptor()
+	return file_store_instance_setting_proto_enumTypes[3].Descriptor()
 }
 
 func (InstanceStorageSetting_StorageType) Type() protoreflect.EnumType {
-	return &file_store_instance_setting_proto_enumTypes[2]
+	return &file_store_instance_setting_proto_enumTypes[3]
 }
 
 func (x InstanceStorageSetting_StorageType) Number() protoreflect.EnumNumber {
@@ -979,6 +1034,14 @@ type InstanceAISetting struct {
 	// transcription is the speech-to-text feature configuration.
 	// When unset or transcription.provider_id is empty, transcription is disabled.
 	Transcription *TranscriptionConfig `protobuf:"bytes,2,opt,name=transcription,proto3" json:"transcription,omitempty"`
+	// generation assigns the instance-wide text-generation capability.
+	Generation *GenerationConfig `protobuf:"bytes,3,opt,name=generation,proto3" json:"generation,omitempty"`
+	// embedding assigns the instance-wide embedding capability.
+	Embedding *EmbeddingConfig `protobuf:"bytes,4,opt,name=embedding,proto3" json:"embedding,omitempty"`
+	// external_processing_acknowledged records the administrator disclosure acknowledgement.
+	ExternalProcessingAcknowledged bool `protobuf:"varint,5,opt,name=external_processing_acknowledged,json=externalProcessingAcknowledged,proto3" json:"external_processing_acknowledged,omitempty"`
+	// readiness records the last bounded validation result for each capability.
+	Readiness     *CapabilityReadiness `protobuf:"bytes,6,opt,name=readiness,proto3" json:"readiness,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1027,6 +1090,34 @@ func (x *InstanceAISetting) GetTranscription() *TranscriptionConfig {
 	return nil
 }
 
+func (x *InstanceAISetting) GetGeneration() *GenerationConfig {
+	if x != nil {
+		return x.Generation
+	}
+	return nil
+}
+
+func (x *InstanceAISetting) GetEmbedding() *EmbeddingConfig {
+	if x != nil {
+		return x.Embedding
+	}
+	return nil
+}
+
+func (x *InstanceAISetting) GetExternalProcessingAcknowledged() bool {
+	if x != nil {
+		return x.ExternalProcessingAcknowledged
+	}
+	return false
+}
+
+func (x *InstanceAISetting) GetReadiness() *CapabilityReadiness {
+	if x != nil {
+		return x.Readiness
+	}
+	return nil
+}
+
 type AIProviderConfig struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	Id       string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -1034,9 +1125,13 @@ type AIProviderConfig struct {
 	Type     AIProviderType         `protobuf:"varint,3,opt,name=type,proto3,enum=memos.store.AIProviderType" json:"type,omitempty"`
 	Endpoint string                 `protobuf:"bytes,4,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
 	// api_key is write-only at the API layer and is required by the server to call providers.
-	ApiKey        string `protobuf:"bytes,5,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ApiKey string `protobuf:"bytes,5,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
+	// allow_private_network explicitly authorizes this provider to reach private destinations.
+	AllowPrivateNetwork bool `protobuf:"varint,6,opt,name=allow_private_network,json=allowPrivateNetwork,proto3" json:"allow_private_network,omitempty"`
+	// private_network_policy_configured distinguishes legacy stored endpoints from new explicit policy.
+	PrivateNetworkPolicyConfigured bool `protobuf:"varint,7,opt,name=private_network_policy_configured,json=privateNetworkPolicyConfigured,proto3" json:"private_network_policy_configured,omitempty"`
+	unknownFields                  protoimpl.UnknownFields
+	sizeCache                      protoimpl.SizeCache
 }
 
 func (x *AIProviderConfig) Reset() {
@@ -1102,6 +1197,20 @@ func (x *AIProviderConfig) GetApiKey() string {
 		return x.ApiKey
 	}
 	return ""
+}
+
+func (x *AIProviderConfig) GetAllowPrivateNetwork() bool {
+	if x != nil {
+		return x.AllowPrivateNetwork
+	}
+	return false
+}
+
+func (x *AIProviderConfig) GetPrivateNetworkPolicyConfigured() bool {
+	if x != nil {
+		return x.PrivateNetworkPolicyConfigured
+	}
+	return false
 }
 
 // TranscriptionConfig configures the speech-to-text feature.
@@ -1191,6 +1300,189 @@ func (x *TranscriptionConfig) GetPrompt() string {
 	return ""
 }
 
+// GenerationConfig assigns a provider and model for text generation.
+type GenerationConfig struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProviderId    string                 `protobuf:"bytes,1,opt,name=provider_id,json=providerId,proto3" json:"provider_id,omitempty"`
+	Model         string                 `protobuf:"bytes,2,opt,name=model,proto3" json:"model,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GenerationConfig) Reset() {
+	*x = GenerationConfig{}
+	mi := &file_store_instance_setting_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GenerationConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GenerationConfig) ProtoMessage() {}
+
+func (x *GenerationConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_store_instance_setting_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GenerationConfig.ProtoReflect.Descriptor instead.
+func (*GenerationConfig) Descriptor() ([]byte, []int) {
+	return file_store_instance_setting_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *GenerationConfig) GetProviderId() string {
+	if x != nil {
+		return x.ProviderId
+	}
+	return ""
+}
+
+func (x *GenerationConfig) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+// EmbeddingConfig assigns a provider and model for embeddings.
+type EmbeddingConfig struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProviderId    string                 `protobuf:"bytes,1,opt,name=provider_id,json=providerId,proto3" json:"provider_id,omitempty"`
+	Model         string                 `protobuf:"bytes,2,opt,name=model,proto3" json:"model,omitempty"`
+	Dimensions    int32                  `protobuf:"varint,3,opt,name=dimensions,proto3" json:"dimensions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EmbeddingConfig) Reset() {
+	*x = EmbeddingConfig{}
+	mi := &file_store_instance_setting_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EmbeddingConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EmbeddingConfig) ProtoMessage() {}
+
+func (x *EmbeddingConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_store_instance_setting_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EmbeddingConfig.ProtoReflect.Descriptor instead.
+func (*EmbeddingConfig) Descriptor() ([]byte, []int) {
+	return file_store_instance_setting_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *EmbeddingConfig) GetProviderId() string {
+	if x != nil {
+		return x.ProviderId
+	}
+	return ""
+}
+
+func (x *EmbeddingConfig) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *EmbeddingConfig) GetDimensions() int32 {
+	if x != nil {
+		return x.Dimensions
+	}
+	return 0
+}
+
+// CapabilityReadiness is the last independently validated capability state.
+type CapabilityReadiness struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	TextGeneration  CapabilityState        `protobuf:"varint,1,opt,name=text_generation,json=textGeneration,proto3,enum=memos.store.CapabilityState" json:"text_generation,omitempty"`
+	Streaming       CapabilityState        `protobuf:"varint,2,opt,name=streaming,proto3,enum=memos.store.CapabilityState" json:"streaming,omitempty"`
+	StructuredTools CapabilityState        `protobuf:"varint,3,opt,name=structured_tools,json=structuredTools,proto3,enum=memos.store.CapabilityState" json:"structured_tools,omitempty"`
+	Embeddings      CapabilityState        `protobuf:"varint,4,opt,name=embeddings,proto3,enum=memos.store.CapabilityState" json:"embeddings,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *CapabilityReadiness) Reset() {
+	*x = CapabilityReadiness{}
+	mi := &file_store_instance_setting_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CapabilityReadiness) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CapabilityReadiness) ProtoMessage() {}
+
+func (x *CapabilityReadiness) ProtoReflect() protoreflect.Message {
+	mi := &file_store_instance_setting_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CapabilityReadiness.ProtoReflect.Descriptor instead.
+func (*CapabilityReadiness) Descriptor() ([]byte, []int) {
+	return file_store_instance_setting_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *CapabilityReadiness) GetTextGeneration() CapabilityState {
+	if x != nil {
+		return x.TextGeneration
+	}
+	return CapabilityState_CAPABILITY_STATE_UNSPECIFIED
+}
+
+func (x *CapabilityReadiness) GetStreaming() CapabilityState {
+	if x != nil {
+		return x.Streaming
+	}
+	return CapabilityState_CAPABILITY_STATE_UNSPECIFIED
+}
+
+func (x *CapabilityReadiness) GetStructuredTools() CapabilityState {
+	if x != nil {
+		return x.StructuredTools
+	}
+	return CapabilityState_CAPABILITY_STATE_UNSPECIFIED
+}
+
+func (x *CapabilityReadiness) GetEmbeddings() CapabilityState {
+	if x != nil {
+		return x.Embeddings
+	}
+	return CapabilityState_CAPABILITY_STATE_UNSPECIFIED
+}
+
 type InstanceNotificationSetting_EmailSetting struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
@@ -1209,7 +1501,7 @@ type InstanceNotificationSetting_EmailSetting struct {
 
 func (x *InstanceNotificationSetting_EmailSetting) Reset() {
 	*x = InstanceNotificationSetting_EmailSetting{}
-	mi := &file_store_instance_setting_proto_msgTypes[14]
+	mi := &file_store_instance_setting_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1221,7 +1513,7 @@ func (x *InstanceNotificationSetting_EmailSetting) String() string {
 func (*InstanceNotificationSetting_EmailSetting) ProtoMessage() {}
 
 func (x *InstanceNotificationSetting_EmailSetting) ProtoReflect() protoreflect.Message {
-	mi := &file_store_instance_setting_proto_msgTypes[14]
+	mi := &file_store_instance_setting_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1384,22 +1676,48 @@ const file_store_instance_setting_proto_rawDesc = "" +
 	"\breply_to\x18\b \x01(\tR\areplyTo\x12\x17\n" +
 	"\ause_tls\x18\t \x01(\bR\x06useTls\x12\x17\n" +
 	"\ause_ssl\x18\n" +
-	" \x01(\bR\x06useSsl\"\x98\x01\n" +
+	" \x01(\bR\x06useSsl\"\x9d\x03\n" +
 	"\x11InstanceAISetting\x12;\n" +
 	"\tproviders\x18\x01 \x03(\v2\x1d.memos.store.AIProviderConfigR\tproviders\x12F\n" +
-	"\rtranscription\x18\x02 \x01(\v2 .memos.store.TranscriptionConfigR\rtranscription\"\x9e\x01\n" +
+	"\rtranscription\x18\x02 \x01(\v2 .memos.store.TranscriptionConfigR\rtranscription\x12=\n" +
+	"\n" +
+	"generation\x18\x03 \x01(\v2\x1d.memos.store.GenerationConfigR\n" +
+	"generation\x12:\n" +
+	"\tembedding\x18\x04 \x01(\v2\x1c.memos.store.EmbeddingConfigR\tembedding\x12H\n" +
+	" external_processing_acknowledged\x18\x05 \x01(\bR\x1eexternalProcessingAcknowledged\x12>\n" +
+	"\treadiness\x18\x06 \x01(\v2 .memos.store.CapabilityReadinessR\treadiness\"\x9d\x02\n" +
 	"\x10AIProviderConfig\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12/\n" +
 	"\x04type\x18\x03 \x01(\x0e2\x1b.memos.store.AIProviderTypeR\x04type\x12\x1a\n" +
 	"\bendpoint\x18\x04 \x01(\tR\bendpoint\x12\x17\n" +
-	"\aapi_key\x18\x05 \x01(\tR\x06apiKey\"\x80\x01\n" +
+	"\aapi_key\x18\x05 \x01(\tR\x06apiKey\x122\n" +
+	"\x15allow_private_network\x18\x06 \x01(\bR\x13allowPrivateNetwork\x12I\n" +
+	"!private_network_policy_configured\x18\a \x01(\bR\x1eprivateNetworkPolicyConfigured\"\x80\x01\n" +
 	"\x13TranscriptionConfig\x12\x1f\n" +
 	"\vprovider_id\x18\x01 \x01(\tR\n" +
 	"providerId\x12\x14\n" +
 	"\x05model\x18\x02 \x01(\tR\x05model\x12\x1a\n" +
 	"\blanguage\x18\x03 \x01(\tR\blanguage\x12\x16\n" +
-	"\x06prompt\x18\x04 \x01(\tR\x06prompt*\x95\x01\n" +
+	"\x06prompt\x18\x04 \x01(\tR\x06prompt\"I\n" +
+	"\x10GenerationConfig\x12\x1f\n" +
+	"\vprovider_id\x18\x01 \x01(\tR\n" +
+	"providerId\x12\x14\n" +
+	"\x05model\x18\x02 \x01(\tR\x05model\"h\n" +
+	"\x0fEmbeddingConfig\x12\x1f\n" +
+	"\vprovider_id\x18\x01 \x01(\tR\n" +
+	"providerId\x12\x14\n" +
+	"\x05model\x18\x02 \x01(\tR\x05model\x12\x1e\n" +
+	"\n" +
+	"dimensions\x18\x03 \x01(\x05R\n" +
+	"dimensions\"\x9f\x02\n" +
+	"\x13CapabilityReadiness\x12E\n" +
+	"\x0ftext_generation\x18\x01 \x01(\x0e2\x1c.memos.store.CapabilityStateR\x0etextGeneration\x12:\n" +
+	"\tstreaming\x18\x02 \x01(\x0e2\x1c.memos.store.CapabilityStateR\tstreaming\x12G\n" +
+	"\x10structured_tools\x18\x03 \x01(\x0e2\x1c.memos.store.CapabilityStateR\x0fstructuredTools\x12<\n" +
+	"\n" +
+	"embeddings\x18\x04 \x01(\x0e2\x1c.memos.store.CapabilityStateR\n" +
+	"embeddings*\x95\x01\n" +
 	"\x12InstanceSettingKey\x12$\n" +
 	" INSTANCE_SETTING_KEY_UNSPECIFIED\x10\x00\x12\t\n" +
 	"\x05BASIC\x10\x01\x12\v\n" +
@@ -1414,7 +1732,13 @@ const file_store_instance_setting_proto_rawDesc = "" +
 	"\n" +
 	"\x06OPENAI\x10\x01\x12\n" +
 	"\n" +
-	"\x06GEMINI\x10\x02B\x9f\x01\n" +
+	"\x06GEMINI\x10\x02*t\n" +
+	"\x0fCapabilityState\x12 \n" +
+	"\x1cCAPABILITY_STATE_UNSPECIFIED\x10\x00\x12\x12\n" +
+	"\x0eNOT_CONFIGURED\x10\x01\x12\x0f\n" +
+	"\vUNVALIDATED\x10\x02\x12\t\n" +
+	"\x05READY\x10\x03\x12\x0f\n" +
+	"\vUNAVAILABLE\x10\x04B\x9f\x01\n" +
 	"\x0fcom.memos.storeB\x14InstanceSettingProtoP\x01Z)github.com/usememos/memos/proto/gen/store\xa2\x02\x03MSX\xaa\x02\vMemos.Store\xca\x02\vMemos\\Store\xe2\x02\x17Memos\\Store\\GPBMetadata\xea\x02\fMemos::Storeb\x06proto3"
 
 var (
@@ -1429,53 +1753,64 @@ func file_store_instance_setting_proto_rawDescGZIP() []byte {
 	return file_store_instance_setting_proto_rawDescData
 }
 
-var file_store_instance_setting_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_store_instance_setting_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_store_instance_setting_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_store_instance_setting_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_store_instance_setting_proto_goTypes = []any{
 	(InstanceSettingKey)(0),                          // 0: memos.store.InstanceSettingKey
 	(AIProviderType)(0),                              // 1: memos.store.AIProviderType
-	(InstanceStorageSetting_StorageType)(0),          // 2: memos.store.InstanceStorageSetting.StorageType
-	(*InstanceSetting)(nil),                          // 3: memos.store.InstanceSetting
-	(*InstanceBasicSetting)(nil),                     // 4: memos.store.InstanceBasicSetting
-	(*InstanceGeneralSetting)(nil),                   // 5: memos.store.InstanceGeneralSetting
-	(*InstanceCustomProfile)(nil),                    // 6: memos.store.InstanceCustomProfile
-	(*InstanceStorageSetting)(nil),                   // 7: memos.store.InstanceStorageSetting
-	(*StorageS3Config)(nil),                          // 8: memos.store.StorageS3Config
-	(*InstanceMemoRelatedSetting)(nil),               // 9: memos.store.InstanceMemoRelatedSetting
-	(*InstanceTagMetadata)(nil),                      // 10: memos.store.InstanceTagMetadata
-	(*InstanceTagsSetting)(nil),                      // 11: memos.store.InstanceTagsSetting
-	(*InstanceNotificationSetting)(nil),              // 12: memos.store.InstanceNotificationSetting
-	(*InstanceAISetting)(nil),                        // 13: memos.store.InstanceAISetting
-	(*AIProviderConfig)(nil),                         // 14: memos.store.AIProviderConfig
-	(*TranscriptionConfig)(nil),                      // 15: memos.store.TranscriptionConfig
-	nil,                                              // 16: memos.store.InstanceTagsSetting.TagsEntry
-	(*InstanceNotificationSetting_EmailSetting)(nil), // 17: memos.store.InstanceNotificationSetting.EmailSetting
-	(*color.Color)(nil),                              // 18: google.type.Color
+	(CapabilityState)(0),                             // 2: memos.store.CapabilityState
+	(InstanceStorageSetting_StorageType)(0),          // 3: memos.store.InstanceStorageSetting.StorageType
+	(*InstanceSetting)(nil),                          // 4: memos.store.InstanceSetting
+	(*InstanceBasicSetting)(nil),                     // 5: memos.store.InstanceBasicSetting
+	(*InstanceGeneralSetting)(nil),                   // 6: memos.store.InstanceGeneralSetting
+	(*InstanceCustomProfile)(nil),                    // 7: memos.store.InstanceCustomProfile
+	(*InstanceStorageSetting)(nil),                   // 8: memos.store.InstanceStorageSetting
+	(*StorageS3Config)(nil),                          // 9: memos.store.StorageS3Config
+	(*InstanceMemoRelatedSetting)(nil),               // 10: memos.store.InstanceMemoRelatedSetting
+	(*InstanceTagMetadata)(nil),                      // 11: memos.store.InstanceTagMetadata
+	(*InstanceTagsSetting)(nil),                      // 12: memos.store.InstanceTagsSetting
+	(*InstanceNotificationSetting)(nil),              // 13: memos.store.InstanceNotificationSetting
+	(*InstanceAISetting)(nil),                        // 14: memos.store.InstanceAISetting
+	(*AIProviderConfig)(nil),                         // 15: memos.store.AIProviderConfig
+	(*TranscriptionConfig)(nil),                      // 16: memos.store.TranscriptionConfig
+	(*GenerationConfig)(nil),                         // 17: memos.store.GenerationConfig
+	(*EmbeddingConfig)(nil),                          // 18: memos.store.EmbeddingConfig
+	(*CapabilityReadiness)(nil),                      // 19: memos.store.CapabilityReadiness
+	nil,                                              // 20: memos.store.InstanceTagsSetting.TagsEntry
+	(*InstanceNotificationSetting_EmailSetting)(nil), // 21: memos.store.InstanceNotificationSetting.EmailSetting
+	(*color.Color)(nil),                              // 22: google.type.Color
 }
 var file_store_instance_setting_proto_depIdxs = []int32{
 	0,  // 0: memos.store.InstanceSetting.key:type_name -> memos.store.InstanceSettingKey
-	4,  // 1: memos.store.InstanceSetting.basic_setting:type_name -> memos.store.InstanceBasicSetting
-	5,  // 2: memos.store.InstanceSetting.general_setting:type_name -> memos.store.InstanceGeneralSetting
-	7,  // 3: memos.store.InstanceSetting.storage_setting:type_name -> memos.store.InstanceStorageSetting
-	9,  // 4: memos.store.InstanceSetting.memo_related_setting:type_name -> memos.store.InstanceMemoRelatedSetting
-	11, // 5: memos.store.InstanceSetting.tags_setting:type_name -> memos.store.InstanceTagsSetting
-	12, // 6: memos.store.InstanceSetting.notification_setting:type_name -> memos.store.InstanceNotificationSetting
-	13, // 7: memos.store.InstanceSetting.ai_setting:type_name -> memos.store.InstanceAISetting
-	6,  // 8: memos.store.InstanceGeneralSetting.custom_profile:type_name -> memos.store.InstanceCustomProfile
-	2,  // 9: memos.store.InstanceStorageSetting.storage_type:type_name -> memos.store.InstanceStorageSetting.StorageType
-	8,  // 10: memos.store.InstanceStorageSetting.s3_config:type_name -> memos.store.StorageS3Config
-	18, // 11: memos.store.InstanceTagMetadata.background_color:type_name -> google.type.Color
-	16, // 12: memos.store.InstanceTagsSetting.tags:type_name -> memos.store.InstanceTagsSetting.TagsEntry
-	17, // 13: memos.store.InstanceNotificationSetting.email:type_name -> memos.store.InstanceNotificationSetting.EmailSetting
-	14, // 14: memos.store.InstanceAISetting.providers:type_name -> memos.store.AIProviderConfig
-	15, // 15: memos.store.InstanceAISetting.transcription:type_name -> memos.store.TranscriptionConfig
-	1,  // 16: memos.store.AIProviderConfig.type:type_name -> memos.store.AIProviderType
-	10, // 17: memos.store.InstanceTagsSetting.TagsEntry.value:type_name -> memos.store.InstanceTagMetadata
-	18, // [18:18] is the sub-list for method output_type
-	18, // [18:18] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	5,  // 1: memos.store.InstanceSetting.basic_setting:type_name -> memos.store.InstanceBasicSetting
+	6,  // 2: memos.store.InstanceSetting.general_setting:type_name -> memos.store.InstanceGeneralSetting
+	8,  // 3: memos.store.InstanceSetting.storage_setting:type_name -> memos.store.InstanceStorageSetting
+	10, // 4: memos.store.InstanceSetting.memo_related_setting:type_name -> memos.store.InstanceMemoRelatedSetting
+	12, // 5: memos.store.InstanceSetting.tags_setting:type_name -> memos.store.InstanceTagsSetting
+	13, // 6: memos.store.InstanceSetting.notification_setting:type_name -> memos.store.InstanceNotificationSetting
+	14, // 7: memos.store.InstanceSetting.ai_setting:type_name -> memos.store.InstanceAISetting
+	7,  // 8: memos.store.InstanceGeneralSetting.custom_profile:type_name -> memos.store.InstanceCustomProfile
+	3,  // 9: memos.store.InstanceStorageSetting.storage_type:type_name -> memos.store.InstanceStorageSetting.StorageType
+	9,  // 10: memos.store.InstanceStorageSetting.s3_config:type_name -> memos.store.StorageS3Config
+	22, // 11: memos.store.InstanceTagMetadata.background_color:type_name -> google.type.Color
+	20, // 12: memos.store.InstanceTagsSetting.tags:type_name -> memos.store.InstanceTagsSetting.TagsEntry
+	21, // 13: memos.store.InstanceNotificationSetting.email:type_name -> memos.store.InstanceNotificationSetting.EmailSetting
+	15, // 14: memos.store.InstanceAISetting.providers:type_name -> memos.store.AIProviderConfig
+	16, // 15: memos.store.InstanceAISetting.transcription:type_name -> memos.store.TranscriptionConfig
+	17, // 16: memos.store.InstanceAISetting.generation:type_name -> memos.store.GenerationConfig
+	18, // 17: memos.store.InstanceAISetting.embedding:type_name -> memos.store.EmbeddingConfig
+	19, // 18: memos.store.InstanceAISetting.readiness:type_name -> memos.store.CapabilityReadiness
+	1,  // 19: memos.store.AIProviderConfig.type:type_name -> memos.store.AIProviderType
+	2,  // 20: memos.store.CapabilityReadiness.text_generation:type_name -> memos.store.CapabilityState
+	2,  // 21: memos.store.CapabilityReadiness.streaming:type_name -> memos.store.CapabilityState
+	2,  // 22: memos.store.CapabilityReadiness.structured_tools:type_name -> memos.store.CapabilityState
+	2,  // 23: memos.store.CapabilityReadiness.embeddings:type_name -> memos.store.CapabilityState
+	11, // 24: memos.store.InstanceTagsSetting.TagsEntry.value:type_name -> memos.store.InstanceTagMetadata
+	25, // [25:25] is the sub-list for method output_type
+	25, // [25:25] is the sub-list for method input_type
+	25, // [25:25] is the sub-list for extension type_name
+	25, // [25:25] is the sub-list for extension extendee
+	0,  // [0:25] is the sub-list for field type_name
 }
 
 func init() { file_store_instance_setting_proto_init() }
@@ -1497,8 +1832,8 @@ func file_store_instance_setting_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_store_instance_setting_proto_rawDesc), len(file_store_instance_setting_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   15,
+			NumEnums:      4,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -3,12 +3,16 @@ package v1
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	"github.com/usememos/memos/internal/ai"
+	"github.com/usememos/memos/internal/ai/gateway"
 	v1pb "github.com/usememos/memos/proto/gen/api/v1"
 	storepb "github.com/usememos/memos/proto/gen/store"
 	"github.com/usememos/memos/server/notification"
@@ -56,14 +60,19 @@ func (s *APIV1Service) GetInstanceProfile(ctx context.Context, _ *v1pb.GetInstan
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to list users: %v", err)
 	}
+	aiSetting, err := s.Store.GetInstanceAISetting(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get AI setting: %v", err)
+	}
 
 	instanceProfile := &v1pb.InstanceProfile{
-		Version:     s.Profile.Version,
-		Demo:        s.Profile.Demo,
-		InstanceUrl: s.Profile.InstanceURL,
-		Admin:       admin, // for display only; may be nil even on a populated instance
-		Commit:      s.Profile.Commit,
-		NeedsSetup:  len(users) == 0,
+		Version:                     s.Profile.Version,
+		Demo:                        s.Profile.Demo,
+		InstanceUrl:                 s.Profile.InstanceURL,
+		Admin:                       admin, // for display only; may be nil even on a populated instance
+		Commit:                      s.Profile.Commit,
+		NeedsSetup:                  len(users) == 0,
+		ExternalAiProcessingEnabled: aiSetting.GetGeneration().GetProviderId() != "" || aiSetting.GetEmbedding().GetProviderId() != "",
 	}
 	return instanceProfile, nil
 }
@@ -287,6 +296,164 @@ func (s *APIV1Service) TestInstanceEmailSetting(ctx context.Context, request *v1
 	}
 
 	return &emptypb.Empty{}, nil
+}
+
+// TestInstanceAISetting tests one configured AI capability through the shared provider transport.
+func (s *APIV1Service) TestInstanceAISetting(ctx context.Context, request *v1pb.TestInstanceAISettingRequest) (*v1pb.TestInstanceAISettingResponse, error) {
+	user, err := s.fetchCurrentUser(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get current user: %v", err)
+	}
+	if user == nil {
+		return nil, status.Error(codes.Unauthenticated, "user not authenticated")
+	}
+	if user.Role != store.RoleAdmin {
+		return nil, status.Error(codes.PermissionDenied, "permission denied")
+	}
+	if request == nil || request.Provider == nil {
+		return nil, status.Error(codes.InvalidArgument, "AI provider is required")
+	}
+	modelName := strings.TrimSpace(request.Model)
+	if modelName == "" || len(modelName) > maxTranscriptionConfigModelLength {
+		return nil, status.Error(codes.InvalidArgument, "AI model is required and must not exceed 256 characters")
+	}
+	if request.Dimensions < 0 || request.Dimensions > 65536 {
+		return nil, status.Error(codes.InvalidArgument, "embedding dimensions must be between 1 and 65536 when specified")
+	}
+	capability, err := convertAICapability(request.Capability)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	provider, err := s.resolveConnectivityTestProvider(ctx, request.Provider)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	client := ai.NewHTTPClient(ai.TransportConfig{AllowPrivateNetwork: provider.AllowPrivateNetwork})
+	factory := s.AIModelFactory
+	if factory == nil {
+		factory = gateway.NewModel
+	}
+	model, err := factory(provider, client)
+	if err != nil {
+		return sanitizedConnectivityResponse(err), nil
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	err = model.Probe(probeCtx, capability, modelName, int(request.Dimensions))
+	_ = s.persistCapabilityReadiness(ctx, request.Provider.Id, modelName, request.Dimensions, capability, err == nil)
+	if err != nil {
+		return sanitizedConnectivityResponse(err), nil
+	}
+	return &v1pb.TestInstanceAISettingResponse{Ready: true, Message: "AI capability is ready"}, nil
+}
+
+func (s *APIV1Service) resolveConnectivityTestProvider(ctx context.Context, request *v1pb.InstanceSetting_AIProviderConfig) (ai.ProviderConfig, error) {
+	provider := ai.ProviderConfig{
+		ID: request.GetId(), Title: strings.TrimSpace(request.GetTitle()), Endpoint: strings.TrimSpace(request.GetEndpoint()),
+		APIKey: request.GetApiKey(), AllowPrivateNetwork: request.GetAllowPrivateNetwork(),
+	}
+	switch request.GetType() {
+	case v1pb.InstanceSetting_OPENAI:
+		provider.Type = ai.ProviderOpenAI
+		if provider.Endpoint == "" {
+			provider.Endpoint = "https://api.openai.com/v1"
+		}
+	case v1pb.InstanceSetting_GEMINI:
+		provider.Type = ai.ProviderGemini
+		if provider.Endpoint == "" {
+			provider.Endpoint = "https://generativelanguage.googleapis.com/v1beta"
+		}
+	default:
+		return ai.ProviderConfig{}, errors.New("AI provider type is unsupported")
+	}
+	if provider.APIKey == "" && provider.ID != "" {
+		existing, err := s.Store.GetInstanceAISetting(ctx)
+		if err != nil {
+			return ai.ProviderConfig{}, errors.Wrap(err, "failed to get stored AI provider")
+		}
+		for _, candidate := range existing.Providers {
+			if candidate.GetId() != provider.ID {
+				continue
+			}
+			if ai.ProviderType(candidate.GetType().String()) != provider.Type || candidate.GetEndpoint() != provider.Endpoint {
+				return ai.ProviderConfig{}, errors.New("AI provider key is required when changing provider type or endpoint")
+			}
+			provider.APIKey = candidate.GetApiKey()
+			break
+		}
+	}
+	if provider.APIKey == "" {
+		return ai.ProviderConfig{}, errors.New("AI provider API key is required")
+	}
+	if _, err := ai.ValidateEndpoint(provider.Endpoint, provider.AllowPrivateNetwork); err != nil {
+		return ai.ProviderConfig{}, err
+	}
+	return provider, nil
+}
+
+func convertAICapability(capability v1pb.InstanceSetting_AICapability) (ai.Capability, error) {
+	switch capability {
+	case v1pb.InstanceSetting_TEXT_GENERATION:
+		return ai.CapabilityTextGeneration, nil
+	case v1pb.InstanceSetting_STREAMING:
+		return ai.CapabilityStreaming, nil
+	case v1pb.InstanceSetting_STRUCTURED_TOOLS:
+		return ai.CapabilityStructuredTools, nil
+	case v1pb.InstanceSetting_EMBEDDINGS:
+		return ai.CapabilityEmbeddings, nil
+	default:
+		return "", errors.New("AI capability is unsupported")
+	}
+}
+
+func sanitizedConnectivityResponse(err error) *v1pb.TestInstanceAISettingResponse {
+	category := ai.CategoryOf(err)
+	messages := map[ai.ErrorCategory]string{
+		ai.ErrorConfiguration:  "AI provider configuration was rejected",
+		ai.ErrorAuthentication: "AI provider authentication failed",
+		ai.ErrorRateLimit:      "AI provider rate limit exceeded",
+		ai.ErrorTimeout:        "AI provider request timed out",
+		ai.ErrorUnavailable:    "AI provider is unavailable",
+		ai.ErrorMalformed:      "AI provider returned malformed data",
+		ai.ErrorInternal:       "AI provider test failed",
+	}
+	return &v1pb.TestInstanceAISettingResponse{Category: string(category), Message: messages[category]}
+}
+
+func (s *APIV1Service) persistCapabilityReadiness(ctx context.Context, providerID, modelName string, dimensions int32, capability ai.Capability, ready bool) error {
+	setting, err := s.Store.GetInstanceAISetting(ctx)
+	if err != nil || setting == nil {
+		return err
+	}
+	matches := false
+	if capability == ai.CapabilityEmbeddings {
+		matches = setting.GetEmbedding().GetProviderId() == providerID && setting.GetEmbedding().GetModel() == modelName && setting.GetEmbedding().GetDimensions() == dimensions
+	} else {
+		matches = setting.GetGeneration().GetProviderId() == providerID && setting.GetGeneration().GetModel() == modelName
+	}
+	if !matches {
+		return nil
+	}
+	updated := proto.Clone(setting).(*storepb.InstanceAISetting)
+	if updated.Readiness == nil {
+		updated.Readiness = &storepb.CapabilityReadiness{}
+	}
+	state := storepb.CapabilityState_UNAVAILABLE
+	if ready {
+		state = storepb.CapabilityState_READY
+	}
+	switch capability {
+	case ai.CapabilityTextGeneration:
+		updated.Readiness.TextGeneration = state
+	case ai.CapabilityStreaming:
+		updated.Readiness.Streaming = state
+	case ai.CapabilityStructuredTools:
+		updated.Readiness.StructuredTools = state
+	case ai.CapabilityEmbeddings:
+		updated.Readiness.Embeddings = state
+	}
+	_, err = s.Store.UpsertInstanceSetting(ctx, &storepb.InstanceSetting{Key: storepb.InstanceSettingKey_AI, Value: &storepb.InstanceSetting_AiSetting{AiSetting: updated}})
+	return err
 }
 
 func (s *APIV1Service) resolveTestEmailSetting(ctx context.Context, requestEmail *v1pb.InstanceSetting_NotificationSetting_EmailSetting) (*storepb.InstanceNotificationSetting_EmailSetting, error) {

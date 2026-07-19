@@ -4,9 +4,11 @@ import (
 	"cmp"
 	"context"
 	"slices"
+	"strings"
 
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	storepb "github.com/usememos/memos/proto/gen/store"
 )
@@ -296,11 +298,56 @@ func (s *Store) GetInstanceAISetting(ctx context.Context) (*storepb.InstanceAISe
 	if instanceSetting != nil {
 		instanceAISetting = instanceSetting.GetAiSetting()
 	}
+	if !s.IsInstanceSettingDeploymentConfigured(storepb.InstanceSettingKey_AI) {
+		migrated := proto.Clone(instanceAISetting).(*storepb.InstanceAISetting)
+		changed := migrateLegacyAIPrivateNetworkPolicy(migrated)
+		if changed {
+			persisted, err := s.UpsertInstanceSetting(ctx, &storepb.InstanceSetting{
+				Key:   storepb.InstanceSettingKey_AI,
+				Value: &storepb.InstanceSetting_AiSetting{AiSetting: migrated},
+			})
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to migrate legacy AI endpoint policy")
+			}
+			instanceAISetting = persisted.GetAiSetting()
+		}
+	}
 	s.cacheInstanceSetting(ctx, &storepb.InstanceSetting{
 		Key:   storepb.InstanceSettingKey_AI,
 		Value: &storepb.InstanceSetting_AiSetting{AiSetting: instanceAISetting},
 	})
 	return instanceAISetting, nil
+}
+
+func migrateLegacyAIPrivateNetworkPolicy(setting *storepb.InstanceAISetting) bool {
+	if setting == nil {
+		return false
+	}
+	transcriptionProviderID := setting.GetTranscription().GetProviderId()
+	changed := false
+	for _, provider := range setting.Providers {
+		if provider == nil || provider.PrivateNetworkPolicyConfigured {
+			continue
+		}
+		if provider.Id == transcriptionProviderID && isCustomAIEndpoint(provider) {
+			provider.AllowPrivateNetwork = true
+		}
+		provider.PrivateNetworkPolicyConfigured = true
+		changed = true
+	}
+	return changed
+}
+
+func isCustomAIEndpoint(provider *storepb.AIProviderConfig) bool {
+	endpoint := strings.TrimSuffix(strings.TrimSpace(provider.GetEndpoint()), "/")
+	switch provider.GetType() {
+	case storepb.AIProviderType_OPENAI:
+		return endpoint != "" && endpoint != "https://api.openai.com/v1"
+	case storepb.AIProviderType_GEMINI:
+		return endpoint != "" && endpoint != "https://generativelanguage.googleapis.com/v1beta"
+	default:
+		return endpoint != ""
+	}
 }
 
 const (

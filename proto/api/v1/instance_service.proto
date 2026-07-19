@@ -51,6 +51,14 @@ service InstanceService {
     };
   }
 
+  // Tests one AI provider capability with bounded, sanitized provider access. Admin only.
+  rpc TestInstanceAISetting(TestInstanceAISettingRequest) returns (TestInstanceAISettingResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/instance/settings/ai:test"
+      body: "*"
+    };
+  }
+
   // GetInstanceStats returns resource usage statistics for the instance. Admin only.
   rpc GetInstanceStats(GetInstanceStatsRequest) returns (InstanceStats) {
     option (google.api.http) = {get: "/api/v1/instance/stats"};
@@ -81,6 +89,9 @@ message InstanceProfile {
   // false once any user exists, so an instance that has lost its admins is not
   // mistaken for a fresh install.
   bool needs_setup = 9;
+
+  // ExternalAIProcessingEnabled reports whether generation or embedding is assigned.
+  bool external_ai_processing_enabled = 10;
 }
 
 // Request for instance profile.
@@ -252,6 +263,18 @@ message InstanceSetting {
     // transcription is the speech-to-text feature configuration.
     // When unset or transcription.provider_id is empty, transcription is disabled.
     TranscriptionConfig transcription = 2;
+
+    // generation assigns the instance-wide text-generation capability.
+    GenerationConfig generation = 3;
+
+    // embedding assigns the instance-wide embedding capability.
+    EmbeddingConfig embedding = 4;
+
+    // external_processing_acknowledged records the administrator disclosure acknowledgement.
+    bool external_processing_acknowledged = 5;
+
+    // readiness is the last independently validated capability state.
+    CapabilityReadiness readiness = 6 [(google.api.field_behavior) = OUTPUT_ONLY];
   }
 
   // AIProviderConfig represents one callable AI provider connection.
@@ -262,6 +285,8 @@ message InstanceSetting {
     string endpoint = 4;
     // api_key is write-only and is never returned by GetInstanceSetting.
     string api_key = 5 [(google.api.field_behavior) = INPUT_ONLY];
+    // allow_private_network explicitly authorizes private-network destinations.
+    bool allow_private_network = 6;
     // api_key_set indicates whether an API key is stored for this provider.
     bool api_key_set = 8 [(google.api.field_behavior) = OUTPUT_ONLY];
     // api_key_hint is a masked hint for the stored API key.
@@ -292,6 +317,43 @@ message InstanceSetting {
 
     // prompt is a default spelling/vocabulary hint passed to the provider.
     string prompt = 4;
+  }
+
+  // GenerationConfig assigns a provider and model for text generation.
+  message GenerationConfig {
+    string provider_id = 1;
+    string model = 2;
+  }
+
+  // EmbeddingConfig assigns a provider and model for embeddings.
+  message EmbeddingConfig {
+    string provider_id = 1;
+    string model = 2;
+    int32 dimensions = 3;
+  }
+
+  // CapabilityReadiness reports each independently validated capability.
+  message CapabilityReadiness {
+    CapabilityState text_generation = 1;
+    CapabilityState streaming = 2;
+    CapabilityState structured_tools = 3;
+    CapabilityState embeddings = 4;
+  }
+
+  enum CapabilityState {
+    CAPABILITY_STATE_UNSPECIFIED = 0;
+    NOT_CONFIGURED = 1;
+    UNVALIDATED = 2;
+    READY = 3;
+    UNAVAILABLE = 4;
+  }
+
+  enum AICapability {
+    AI_CAPABILITY_UNSPECIFIED = 0;
+    TEXT_GENERATION = 1;
+    STREAMING = 2;
+    STRUCTURED_TOOLS = 3;
+    EMBEDDINGS = 4;
   }
 }
 
@@ -337,6 +399,22 @@ message TestInstanceEmailSettingRequest {
 
   // Optional. Recipient email address. If omitted, the current user's email address is used.
   string recipient_email = 2 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// TestInstanceAISettingRequest describes one bounded capability probe.
+message TestInstanceAISettingRequest {
+  // Provider may contain a replacement write-only key; an omitted key preserves the stored key for the same ID.
+  InstanceSetting.AIProviderConfig provider = 1 [(google.api.field_behavior) = REQUIRED];
+  InstanceSetting.AICapability capability = 2 [(google.api.field_behavior) = REQUIRED];
+  string model = 3 [(google.api.field_behavior) = REQUIRED];
+  int32 dimensions = 4 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// TestInstanceAISettingResponse contains no provider payload or credential data.
+message TestInstanceAISettingResponse {
+  bool ready = 1;
+  string category = 2;
+  string message = 3;
 }
 
 // Request message for GetInstanceStats.

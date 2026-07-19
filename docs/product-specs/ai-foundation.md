@@ -1,6 +1,6 @@
 # AI Foundation Product Specification
 
-**Status:** Approved
+**Status:** Implemented
 **Parent product spec:** [AI-Native Notes](ai-native-notes.md)
 **Architecture:** [AI-Native Memos Architecture](../design-docs/ai-native-notes.md)
 **Roadmap scope:** [Stage 1 — Model Foundation](../ROADMAP.md#stage-1-model-foundation)

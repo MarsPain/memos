@@ -57,19 +57,20 @@ authorization or current content.
 
 Provider credentials remain instance-managed, write-only at the API layer, and unavailable to ordinary users. Configuration responses expose only a masked hint and configured state.
 
-Custom provider endpoints create a server-side request boundary. One hardened transport policy applies to transcription, generation, embedding, and
-connectivity tests:
+Custom provider endpoints create a server-side request boundary. Transcription, generation, embedding, and connectivity tests use the shared hardened
+transport under `internal/ai`. The shared policy:
 
 - allow HTTP and HTTPS only; reject URL userinfo, fragments, malformed hosts, and secret-bearing endpoint parameters;
 - validate every redirect and resolved destination, not only the configured string;
 - deny loopback, link-local, and private-network destinations by default;
 - require an explicit administrator opt-in for private-network destinations used by local models;
-- enforce DNS/dial, connection, total-request, redirect-count, request-size, and response-size limits;
+- enforce DNS/dial, connection, total-request, redirect-count, retry-count, request-size, and response-size limits;
 - do not place provider keys in URLs, logs, errors, fingerprints, or metrics.
 
-To preserve existing transcription installations, a custom endpoint persisted before this policy is introduced counts as a prior administrator
-decision and is migrated with private-network access enabled and visibly flagged. New or edited providers and deployment-supplied private endpoints
-must opt in explicitly.
+To preserve existing transcription installations, a custom endpoint persisted before this policy was introduced is detected through an internal
+migration marker, persisted with private-network access enabled, and shown through the normal provider opt-in control. New or edited providers and
+deployment-supplied private endpoints must opt in explicitly. Connectivity responses expose only stable categories (configuration, authentication,
+rate limit, timeout, unavailable, malformed response, or internal) and fixed safe messages.
 
 ## Logging and Audit
 

@@ -61,6 +61,7 @@ const About = () => {
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-semibold tracking-tight text-foreground">{instanceTitle}</h1>
                 {profile.demo && <Badge variant="warning">Demo</Badge>}
+                {profile.externalAiProcessingEnabled && <Badge variant="default">{t("about.external-ai-processing")}</Badge>}
               </div>
               <p className="mt-1 text-sm text-muted-foreground">{instanceTagline}</p>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">

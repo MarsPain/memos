@@ -45,9 +45,10 @@ func TestTranscribe(t *testing.T) {
 	defer server.Close()
 
 	transcriber, err := sttopenai.New(ai.ProviderConfig{
-		Type:     ai.ProviderOpenAI,
-		Endpoint: server.URL,
-		APIKey:   "test-key",
+		Type:                ai.ProviderOpenAI,
+		Endpoint:            server.URL,
+		APIKey:              "test-key",
+		AllowPrivateNetwork: true,
 	}, stt.ApplyOptions(nil))
 	require.NoError(t, err)
 

@@ -9,6 +9,7 @@ import (
 	"github.com/labstack/echo/v5"
 	"golang.org/x/sync/semaphore"
 
+	"github.com/usememos/memos/internal/ai/gateway"
 	"github.com/usememos/memos/internal/markdown"
 	"github.com/usememos/memos/internal/profile"
 	v1pb "github.com/usememos/memos/proto/gen/api/v1"
@@ -35,6 +36,7 @@ type APIV1Service struct {
 	MarkdownService         markdown.Service
 	SSEHub                  *SSEHub
 	NotificationEmailSender notification.EmailSender
+	AIModelFactory          gateway.ModelFactory
 
 	// thumbnailSemaphore limits concurrent thumbnail generation to prevent memory exhaustion
 	thumbnailSemaphore       *semaphore.Weighted
@@ -56,6 +58,7 @@ func NewAPIV1Service(secret string, profile *profile.Profile, store *store.Store
 		MarkdownService:          markdownService,
 		SSEHub:                   NewSSEHub(),
 		NotificationEmailSender:  nil,
+		AIModelFactory:           gateway.NewModel,
 		thumbnailSemaphore:       semaphore.NewWeighted(3), // Limit to 3 concurrent thumbnail generations
 		imageProcessingSemaphore: semaphore.NewWeighted(2),
 	}

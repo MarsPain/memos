@@ -1,11 +1,6 @@
 package audiollm
 
-import (
-	"net/http"
-	"time"
-)
-
-const defaultHTTPTimeout = 2 * time.Minute
+import "net/http"
 
 // Options is the resolved option set passed to provider implementations.
 type Options struct {
@@ -26,7 +21,7 @@ func WithHTTPClient(client *http.Client) ModelOption {
 
 // ApplyOptions resolves a ModelOption slice into Options with defaults.
 func ApplyOptions(opts []ModelOption) Options {
-	resolved := Options{HTTPClient: &http.Client{Timeout: defaultHTTPTimeout}}
+	resolved := Options{}
 	for _, apply := range opts {
 		apply(&resolved)
 	}

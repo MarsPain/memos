@@ -2,7 +2,7 @@
 
 Parent spec: [AI Foundation](../../../docs/product-specs/ai-foundation.md)
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: none
 
 ## Outcome
@@ -40,4 +40,4 @@ Inspect generated diffs for compatibility and secret exposure.
 
 ## Comments
 
-No comments yet.
+Implemented additive store/API protobuf contracts, independent readiness, bounded connectivity-test messages, disclosure/private-network state, and regenerated Go, TypeScript, OpenAPI outputs.

@@ -2,7 +2,7 @@
 
 Parent spec: [AI Foundation](../../../docs/product-specs/ai-foundation.md)
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 01
 
 ## Outcome
@@ -31,4 +31,4 @@ Run interface-level fake tests and `go test -v -race ./internal/...`.
 
 ## Comments
 
-No comments yet.
+Implemented provider-neutral generation, streaming, structured-tool, embedding, usage, finish-reason and validation contracts plus deterministic fakes and gateway resolution.

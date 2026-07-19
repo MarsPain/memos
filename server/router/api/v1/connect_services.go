@@ -55,6 +55,14 @@ func (s *ConnectServiceHandler) TestInstanceEmailSetting(ctx context.Context, re
 	return connect.NewResponse(resp), nil
 }
 
+func (s *ConnectServiceHandler) TestInstanceAISetting(ctx context.Context, req *connect.Request[v1pb.TestInstanceAISettingRequest]) (*connect.Response[v1pb.TestInstanceAISettingResponse], error) {
+	resp, err := s.APIV1Service.TestInstanceAISetting(ctx, req.Msg)
+	if err != nil {
+		return nil, convertGRPCError(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
 func (s *ConnectServiceHandler) GetInstanceStats(ctx context.Context, req *connect.Request[v1pb.GetInstanceStatsRequest]) (*connect.Response[v1pb.InstanceStats], error) {
 	resp, err := s.APIV1Service.GetInstanceStats(ctx, req.Msg)
 	if err != nil {

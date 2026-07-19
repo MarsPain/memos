@@ -14,6 +14,15 @@ The approved design introduces three distinct layers:
 - `server/ai`: authenticated application orchestration for conversations, retrieval, Agent proposals, and indexing.
 - `internal/ai`: provider-neutral model interfaces and concrete OpenAI/Gemini-compatible adapters for generation, embeddings, and transcription.
 
+The Stage 1 foundation is current code. `internal/ai/gateway` resolves provider assignments to the provider-neutral `ai.Model` interface;
+`internal/ai/provider/{openai,gemini}` contains wire adapters; and `internal/ai/transport.go` is the single destination-policy and limit enforcement
+path used by model calls and connectivity probes. API composition injects a model factory, so application callers and tests do not import adapter wire
+types. Capability test results persist only when the tested provider/model still matches the saved assignment.
+
+Generation, streaming, structured tools, and embeddings have independent readiness states. A configured assignment begins unvalidated and never
+becomes ready merely because of provider type. Store and deployment configuration use the existing `InstanceSettingKey_AI` JSON persistence path;
+there is no Stage 1 database schema migration.
+
 API handlers depend on application-module interfaces. Each operation accepts an explicit authenticated principal and `context.Context`; modules do not
 recover identity from global state. `server/ai` does not call API handlers in-process or use raw Store reads as an authorization substitute.
 

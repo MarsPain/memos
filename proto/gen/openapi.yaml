@@ -478,6 +478,31 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /api/v1/instance/settings/ai:test:
+        post:
+            tags:
+                - InstanceService
+            description: Tests one AI provider capability with bounded, sanitized provider access. Admin only.
+            operationId: InstanceService_TestInstanceAISetting
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TestInstanceAISettingRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TestInstanceAISettingResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /api/v1/instance/settings/notification:testEmail:
         post:
             tags:
@@ -2785,6 +2810,9 @@ components:
                          setup (creating the first admin account). Unlike a null admin, this stays
                          false once any user exists, so an instance that has lost its admins is not
                          mistaken for a fresh install.
+                externalAiProcessingEnabled:
+                    type: boolean
+                    description: ExternalAIProcessingEnabled reports whether generation or embedding is assigned.
             description: Instance profile message containing basic instance information.
         InstanceSetting:
             type: object
@@ -2827,6 +2855,9 @@ components:
                     writeOnly: true
                     type: string
                     description: api_key is write-only and is never returned by GetInstanceSetting.
+                allowPrivateNetwork:
+                    type: boolean
+                    description: allow_private_network explicitly authorizes private-network destinations.
                 apiKeySet:
                     readOnly: true
                     type: boolean
@@ -2850,7 +2881,74 @@ components:
                     description: |-
                         transcription is the speech-to-text feature configuration.
                          When unset or transcription.provider_id is empty, transcription is disabled.
+                generation:
+                    allOf:
+                        - $ref: '#/components/schemas/InstanceSetting_GenerationConfig'
+                    description: generation assigns the instance-wide text-generation capability.
+                embedding:
+                    allOf:
+                        - $ref: '#/components/schemas/InstanceSetting_EmbeddingConfig'
+                    description: embedding assigns the instance-wide embedding capability.
+                externalProcessingAcknowledged:
+                    type: boolean
+                    description: external_processing_acknowledged records the administrator disclosure acknowledgement.
+                readiness:
+                    readOnly: true
+                    allOf:
+                        - $ref: '#/components/schemas/InstanceSetting_CapabilityReadiness'
+                    description: readiness is the last independently validated capability state.
             description: AI provider configuration settings.
+        InstanceSetting_CapabilityReadiness:
+            type: object
+            properties:
+                textGeneration:
+                    enum:
+                        - CAPABILITY_STATE_UNSPECIFIED
+                        - NOT_CONFIGURED
+                        - UNVALIDATED
+                        - READY
+                        - UNAVAILABLE
+                    type: string
+                    format: enum
+                streaming:
+                    enum:
+                        - CAPABILITY_STATE_UNSPECIFIED
+                        - NOT_CONFIGURED
+                        - UNVALIDATED
+                        - READY
+                        - UNAVAILABLE
+                    type: string
+                    format: enum
+                structuredTools:
+                    enum:
+                        - CAPABILITY_STATE_UNSPECIFIED
+                        - NOT_CONFIGURED
+                        - UNVALIDATED
+                        - READY
+                        - UNAVAILABLE
+                    type: string
+                    format: enum
+                embeddings:
+                    enum:
+                        - CAPABILITY_STATE_UNSPECIFIED
+                        - NOT_CONFIGURED
+                        - UNVALIDATED
+                        - READY
+                        - UNAVAILABLE
+                    type: string
+                    format: enum
+            description: CapabilityReadiness reports each independently validated capability.
+        InstanceSetting_EmbeddingConfig:
+            type: object
+            properties:
+                providerId:
+                    type: string
+                model:
+                    type: string
+                dimensions:
+                    type: integer
+                    format: int32
+            description: EmbeddingConfig assigns a provider and model for embeddings.
         InstanceSetting_GeneralSetting:
             type: object
             properties:
@@ -2884,6 +2982,14 @@ components:
                     type: boolean
                     description: disallow_change_nickname disallows changing nickname.
             description: General instance settings configuration.
+        InstanceSetting_GenerationConfig:
+            type: object
+            properties:
+                providerId:
+                    type: string
+                model:
+                    type: string
+            description: GenerationConfig assigns a provider and model for text generation.
         InstanceSetting_MemoRelatedSetting:
             type: object
             properties:
@@ -3687,6 +3793,42 @@ components:
             description: |-
                 S3 configuration for cloud storage backend.
                  Reference: https://developers.cloudflare.com/r2/examples/aws/aws-sdk-go/
+        TestInstanceAISettingRequest:
+            required:
+                - provider
+                - capability
+                - model
+            type: object
+            properties:
+                provider:
+                    allOf:
+                        - $ref: '#/components/schemas/InstanceSetting_AIProviderConfig'
+                    description: Provider may contain a replacement write-only key; an omitted key preserves the stored key for the same ID.
+                capability:
+                    enum:
+                        - AI_CAPABILITY_UNSPECIFIED
+                        - TEXT_GENERATION
+                        - STREAMING
+                        - STRUCTURED_TOOLS
+                        - EMBEDDINGS
+                    type: string
+                    format: enum
+                model:
+                    type: string
+                dimensions:
+                    type: integer
+                    format: int32
+            description: TestInstanceAISettingRequest describes one bounded capability probe.
+        TestInstanceAISettingResponse:
+            type: object
+            properties:
+                ready:
+                    type: boolean
+                category:
+                    type: string
+                message:
+                    type: string
+            description: TestInstanceAISettingResponse contains no provider payload or credential data.
         TestInstanceEmailSettingRequest:
             type: object
             properties:

@@ -2,7 +2,7 @@
 
 Parent spec: [AI Foundation](../../../docs/product-specs/ai-foundation.md)
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 01
 
 ## Outcome
@@ -35,4 +35,4 @@ credentials and transcription behavior.
 
 ## Comments
 
-No comments yet.
+Implemented stored/deployment round-trip, credential preservation, assignment/endpoint validation, readiness persistence, and legacy custom-transcription endpoint policy migration without schema changes.

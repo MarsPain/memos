@@ -9,6 +9,7 @@ import (
 	"mime"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/genai"
@@ -54,6 +55,12 @@ func New(cfg ai.ProviderConfig, options audiollm.Options) (*Model, error) {
 	baseURL, apiVersion, err := splitEndpoint(endpoint)
 	if err != nil {
 		return nil, err
+	}
+	if options.HTTPClient == nil {
+		options.HTTPClient = ai.NewHTTPClient(ai.TransportConfig{
+			AllowPrivateNetwork: cfg.AllowPrivateNetwork,
+			Limits:              ai.TransportLimits{MaxRequestBytes: 20 << 20, MaxResponseBytes: 4 << 20, TotalTimeout: 2 * time.Minute},
+		})
 	}
 	httpOptions := genai.HTTPOptions{BaseURL: baseURL, APIVersion: apiVersion}
 	if options.HTTPClient != nil && options.HTTPClient.Timeout > 0 {

@@ -64,9 +64,10 @@ func TestGenerateFromAudio(t *testing.T) {
 	defer server.Close()
 
 	model, err := audiollmgemini.New(ai.ProviderConfig{
-		Type:     ai.ProviderGemini,
-		Endpoint: server.URL + "/v1beta",
-		APIKey:   "test-key",
+		Type:                ai.ProviderGemini,
+		Endpoint:            server.URL + "/v1beta",
+		APIKey:              "test-key",
+		AllowPrivateNetwork: true,
 	}, audiollm.ApplyOptions(nil))
 	require.NoError(t, err)
 

@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	colorpb "google.golang.org/genproto/googleapis/type/color"
 
+	"github.com/usememos/memos/internal/ai"
 	v1pb "github.com/usememos/memos/proto/gen/api/v1"
 	storepb "github.com/usememos/memos/proto/gen/store"
 )
@@ -73,6 +74,9 @@ func (s *APIV1Service) prepareInstanceAISettingForUpdate(ctx context.Context, se
 		if provider.Type == storepb.AIProviderType_GEMINI && provider.Endpoint == "" {
 			provider.Endpoint = "https://generativelanguage.googleapis.com/v1beta"
 		}
+		if _, err := ai.ValidateEndpoint(provider.Endpoint, provider.AllowPrivateNetwork); err != nil {
+			return errors.Wrapf(err, "provider %q endpoint", provider.Id)
+		}
 
 		if provider.ApiKey == "" {
 			if existingProvider, ok := existingProviders[provider.Id]; ok {
@@ -87,7 +91,92 @@ func (s *APIV1Service) prepareInstanceAISettingForUpdate(ctx context.Context, se
 	if err := preparePersistedTranscriptionConfig(setting, existing); err != nil {
 		return err
 	}
+	if err := preparePersistedCapabilityAssignments(setting, existing); err != nil {
+		return err
+	}
 	return nil
+}
+
+func preparePersistedCapabilityAssignments(setting *storepb.InstanceAISetting, existing *storepb.InstanceAISetting) error {
+	if existing != nil {
+		if setting.Generation == nil {
+			setting.Generation = existing.GetGeneration()
+		}
+		if setting.Embedding == nil {
+			setting.Embedding = existing.GetEmbedding()
+		}
+	}
+	providerIDs := make(map[string]struct{}, len(setting.Providers))
+	for _, provider := range setting.Providers {
+		if provider != nil {
+			providerIDs[provider.Id] = struct{}{}
+		}
+	}
+	validateAssignment := func(name, providerID, model string) error {
+		providerID = strings.TrimSpace(providerID)
+		model = strings.TrimSpace(model)
+		if providerID == "" && model == "" {
+			return nil
+		}
+		if providerID == "" || model == "" {
+			return errors.Errorf("%s requires provider_id and model", name)
+		}
+		if _, ok := providerIDs[providerID]; !ok {
+			return errors.Errorf("%s provider_id %q does not reference any configured provider", name, providerID)
+		}
+		if len(model) > maxTranscriptionConfigModelLength {
+			return errors.Errorf("%s model is too long; maximum length is %d characters", name, maxTranscriptionConfigModelLength)
+		}
+		return nil
+	}
+	if generation := setting.Generation; generation != nil {
+		generation.ProviderId = strings.TrimSpace(generation.ProviderId)
+		generation.Model = strings.TrimSpace(generation.Model)
+		if err := validateAssignment("generation", generation.ProviderId, generation.Model); err != nil {
+			return err
+		}
+	}
+	if embedding := setting.Embedding; embedding != nil {
+		embedding.ProviderId = strings.TrimSpace(embedding.ProviderId)
+		embedding.Model = strings.TrimSpace(embedding.Model)
+		if err := validateAssignment("embedding", embedding.ProviderId, embedding.Model); err != nil {
+			return err
+		}
+		if embedding.Dimensions < 0 || embedding.Dimensions > 65536 {
+			return errors.New("embedding dimensions must be between 1 and 65536 when specified")
+		}
+		if embedding.ProviderId != "" && !setting.ExternalProcessingAcknowledged {
+			return errors.New("external processing acknowledgement is required before assigning embeddings")
+		}
+	}
+	setting.Readiness = readinessAfterSettingUpdate(setting, existing)
+	return nil
+}
+
+func readinessAfterSettingUpdate(setting, existing *storepb.InstanceAISetting) *storepb.CapabilityReadiness {
+	readiness := &storepb.CapabilityReadiness{
+		TextGeneration:  storepb.CapabilityState_NOT_CONFIGURED,
+		Streaming:       storepb.CapabilityState_NOT_CONFIGURED,
+		StructuredTools: storepb.CapabilityState_NOT_CONFIGURED,
+		Embeddings:      storepb.CapabilityState_NOT_CONFIGURED,
+	}
+	if setting.GetGeneration().GetProviderId() != "" {
+		readiness.TextGeneration = storepb.CapabilityState_UNVALIDATED
+		readiness.Streaming = storepb.CapabilityState_UNVALIDATED
+		readiness.StructuredTools = storepb.CapabilityState_UNVALIDATED
+	}
+	if setting.GetEmbedding().GetProviderId() != "" {
+		readiness.Embeddings = storepb.CapabilityState_UNVALIDATED
+	}
+	if existing != nil && existing.Readiness != nil &&
+		setting.GetGeneration().GetProviderId() == existing.GetGeneration().GetProviderId() &&
+		setting.GetGeneration().GetModel() == existing.GetGeneration().GetModel() &&
+		setting.GetEmbedding().GetProviderId() == existing.GetEmbedding().GetProviderId() &&
+		setting.GetEmbedding().GetModel() == existing.GetEmbedding().GetModel() &&
+		setting.GetEmbedding().GetDimensions() == existing.GetEmbedding().GetDimensions() {
+		return existing.Readiness
+	}
+	return readiness
 }
 
 func preparePersistedTranscriptionConfig(setting *storepb.InstanceAISetting, existing *storepb.InstanceAISetting) error {

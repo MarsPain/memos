@@ -2,7 +2,7 @@
 
 Parent spec: [AI Foundation](../../../docs/product-specs/ai-foundation.md)
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 03, 04
 
 ## Outcome
@@ -32,4 +32,4 @@ dimension mismatch, and oversized responses. Run `go test -v -race ./internal/..
 
 ## Comments
 
-No comments yet.
+Implemented OpenAI-compatible and Gemini generation/streaming/structured-tool/embedding adapters with shared transport enforcement and deterministic fixtures.

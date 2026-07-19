@@ -12,9 +12,10 @@ const (
 
 // ProviderConfig configures a callable AI provider connection.
 type ProviderConfig struct {
-	ID       string
-	Title    string
-	Type     ProviderType
-	Endpoint string
-	APIKey   string
+	ID                  string
+	Title               string
+	Type                ProviderType
+	Endpoint            string
+	APIKey              string
+	AllowPrivateNetwork bool
 }

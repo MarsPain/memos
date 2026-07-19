@@ -88,6 +88,12 @@ describe("<About>", () => {
     expect(screen.getByText("Demo")).toBeInTheDocument();
   });
 
+  it("discloses external AI processing to every visitor", () => {
+    Object.assign(mockInstance.profile, { externalAiProcessingEnabled: true });
+    render(<About />);
+    expect(screen.getByText("about.external-ai-processing")).toBeInTheDocument();
+  });
+
   it("uses custom branding for the identity hero and credits Memos", () => {
     mockInstance.generalSetting = {
       customProfile: { title: "Team Notes", description: "Our shared scratchpad.", logoUrl: "/custom-logo.png" },

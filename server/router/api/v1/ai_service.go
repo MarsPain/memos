@@ -211,11 +211,12 @@ func (*APIV1Service) resolveAIProvider(setting *storepb.InstanceAISetting, provi
 
 func convertAIProviderConfigFromStore(provider *storepb.AIProviderConfig) ai.ProviderConfig {
 	return ai.ProviderConfig{
-		ID:       provider.GetId(),
-		Title:    provider.GetTitle(),
-		Type:     convertAIProviderTypeFromStore(provider.GetType()),
-		Endpoint: provider.GetEndpoint(),
-		APIKey:   provider.GetApiKey(),
+		ID:                  provider.GetId(),
+		Title:               provider.GetTitle(),
+		Type:                convertAIProviderTypeFromStore(provider.GetType()),
+		Endpoint:            provider.GetEndpoint(),
+		APIKey:              provider.GetApiKey(),
+		AllowPrivateNetwork: provider.GetAllowPrivateNetwork(),
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"mime"
 	"net/url"
 	"strings"
+	"time"
 
 	openaisdk "github.com/openai/openai-go/v3"
 	openaioption "github.com/openai/openai-go/v3/option"
@@ -33,11 +34,18 @@ func New(cfg ai.ProviderConfig, options stt.Options) (*Transcriber, error) {
 	if cfg.APIKey == "" {
 		return nil, errors.New("OpenAI API key is required")
 	}
+	httpClient := options.HTTPClient
+	if httpClient == nil {
+		httpClient = ai.NewHTTPClient(ai.TransportConfig{
+			AllowPrivateNetwork: cfg.AllowPrivateNetwork,
+			Limits:              ai.TransportLimits{MaxRequestBytes: 64 << 20, MaxResponseBytes: 4 << 20, TotalTimeout: 2 * time.Minute},
+		})
+	}
 	return &Transcriber{
 		client: openaisdk.NewClient(
 			openaioption.WithAPIKey(cfg.APIKey),
 			openaioption.WithBaseURL(endpoint),
-			openaioption.WithHTTPClient(options.HTTPClient),
+			openaioption.WithHTTPClient(httpClient),
 		),
 	}, nil
 }

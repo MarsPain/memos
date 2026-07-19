@@ -14,6 +14,13 @@
 
 Chat history is not a Memo and is not included in Memo search. A user may explicitly create a Memo through a confirmed proposal.
 
+## Implemented AI Foundation State
+
+Stage 1 adds no relational schema. The existing instance-setting record stores the provider pool, transcription assignment, generation assignment,
+embedding assignment and optional dimensions, external-processing acknowledgement, per-capability readiness, and the private-network policy marker.
+Provider API keys remain in that write-only setting payload and are removed from API reads. Deployment-supplied AI settings shadow stored settings
+through the existing file-backed configuration lifecycle and are not copied into database tables.
+
 ## Planned AI Records
 
 ### Conversation

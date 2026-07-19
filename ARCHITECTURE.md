@@ -31,16 +31,20 @@ Protocol Buffer sources define the public service contracts. Generated Go, TypeS
 | Server composition | `server/server.go` | HTTP topology, route registration, runner lifecycle |
 | API services | `server/router/api/v1/` | Authentication-aware application operations |
 | External MCP | `server/router/mcp/` | Curated external tool surface derived from OpenAPI |
-| Model adapters | `internal/ai/` | Provider-specific AI transports and transcription |
+| Model gateway | `internal/ai/` | Provider-neutral generation/streaming/embedding contracts, hardened transport, adapters, and transcription |
 | Store | `store/` | Persistence facade, cache, migrations, database adapters |
 | Web application | `web/src/` | React UI, client state, Connect clients |
 | Contracts | `proto/` | Public and internal protobuf source |
 
-## Planned AI-Native Module
+## AI-Native Foundation And Planned Modules
 
-The approved AI-native direction adds a shared `server/memo` application module for Memo authorization and commands plus an in-process `server/ai`
-module for Chat, hybrid retrieval, conversations, indexing, and confirmation-gated Agent proposals. Provider transports remain under `internal/ai`.
-The existing external MCP module is explicitly unchanged.
+Stage 1 is implemented: instance settings persist independent generation and embedding assignments, capability readiness, disclosure acknowledgement,
+and explicit private-network provider authorization. `internal/ai` owns the provider-neutral interfaces, shared bounded/SSRF-aware HTTP transport,
+OpenAI-compatible and Gemini adapters, deterministic fakes, and adapter resolution. The public Instance service exposes an admin-only sanitized
+capability test, while the public instance profile discloses whether external AI processing is enabled.
+
+Later stages add a shared `server/memo` application module for Memo authorization and commands plus an in-process `server/ai` module for Chat, hybrid
+retrieval, conversations, indexing, and confirmation-gated Agent proposals. The existing external MCP module is explicitly unchanged.
 
 Read the canonical [AI-native architecture design](docs/design-docs/ai-native-notes.md), [product specification](docs/product-specs/ai-native-notes.md), and [security rules](docs/SECURITY.md) before implementing AI work.
 
