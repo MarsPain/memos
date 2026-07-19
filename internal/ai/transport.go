@@ -58,7 +58,6 @@ func NewHTTPClient(config TransportConfig) *http.Client {
 	if base == nil {
 		dialer := &net.Dialer{Timeout: limits.DNSAndDialTimeout, KeepAlive: 30 * time.Second}
 		base = &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
 			DialContext:           policyDialContext(dialer, lookup, config.AllowPrivateNetwork),
 			ForceAttemptHTTP2:     true,
 			MaxIdleConns:          20,

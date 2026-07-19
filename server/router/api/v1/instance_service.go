@@ -340,7 +340,9 @@ func (s *APIV1Service) TestInstanceAISetting(ctx context.Context, request *v1pb.
 	probeCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	err = model.Probe(probeCtx, capability, modelName, int(request.Dimensions))
-	_ = s.persistCapabilityReadiness(ctx, request.Provider.Id, modelName, request.Dimensions, capability, err == nil)
+	if persistErr := s.persistCapabilityReadiness(ctx, request.Provider.Id, modelName, request.Dimensions, capability, err == nil); persistErr != nil {
+		return nil, status.Error(codes.Internal, "failed to persist AI capability readiness")
+	}
 	if err != nil {
 		return sanitizedConnectivityResponse(err), nil
 	}

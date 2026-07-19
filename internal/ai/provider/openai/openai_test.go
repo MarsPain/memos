@@ -6,7 +6,9 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -17,6 +19,17 @@ import (
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) { return f(request) }
+
+type trackingBody struct {
+	io.Reader
+	closed chan struct{}
+	once   sync.Once
+}
+
+func (body *trackingBody) Close() error {
+	body.once.Do(func() { close(body.closed) })
+	return nil
+}
 
 func newClient(t *testing.T, handler roundTripFunc) *http.Client {
 	t.Helper()
@@ -81,4 +94,42 @@ func TestAdapterNormalizesProviderFailures(t *testing.T) {
 	require.Equal(t, ai.ErrorAuthentication, ai.CategoryOf(err))
 	require.NotContains(t, err.Error(), "secret provider payload")
 	require.NotContains(t, err.Error(), "private prompt")
+}
+
+func TestAdapterRejectsMalformedAndMismatchedResponses(t *testing.T) {
+	client := newClient(t, func(request *http.Request) (*http.Response, error) {
+		if request.URL.Path == "/v1/embeddings" {
+			return response(request, http.StatusOK, `{"data":[{"index":0,"embedding":[0.5]}]}`), nil
+		}
+		return response(request, http.StatusOK, `{not-json`), nil
+	})
+	adapter := openai.New(ai.ProviderConfig{Endpoint: "https://public.example/v1", APIKey: "secret"}, client)
+
+	_, err := adapter.Generate(context.Background(), ai.GenerationRequest{Model: "chat", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}}})
+	require.Equal(t, ai.ErrorMalformed, ai.CategoryOf(err))
+	_, err = adapter.Embed(context.Background(), ai.EmbeddingRequest{Model: "embed", Inputs: []string{"hello"}, Dimensions: 2})
+	require.Equal(t, ai.ErrorMalformed, ai.CategoryOf(err))
+}
+
+func TestStreamClosesResponseWhenConsumerStopsReading(t *testing.T) {
+	body := &trackingBody{Reader: strings.NewReader("data: {\"choices\":[{\"delta\":{\"content\":\"blocked\"}}]}\n\n"), closed: make(chan struct{})}
+	client := newClient(t, func(request *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: body, Request: request}, nil
+	})
+	adapter := openai.New(ai.ProviderConfig{Endpoint: "https://public.example/v1", APIKey: "secret"}, client)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, err := adapter.Stream(ctx, ai.GenerationRequest{Model: "chat", Messages: []ai.Message{{Role: ai.RoleUser, Content: "hello"}}})
+	require.NoError(t, err)
+	cancel()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-body.closed:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond)
 }

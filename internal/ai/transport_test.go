@@ -56,7 +56,7 @@ func TestProviderTransportBoundsRetries(t *testing.T) {
 		},
 		Base: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 			attempts++
-			status := http.StatusServiceUnavailable
+			status := http.StatusTooManyRequests
 			if attempts == 2 {
 				status = http.StatusOK
 			}
@@ -69,6 +69,49 @@ func TestProviderTransportBoundsRetries(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, response.StatusCode)
 	require.Equal(t, 2, attempts)
+}
+
+func TestProviderTransportRevalidatesDNSAndAllowsExplicitPrivateAccess(t *testing.T) {
+	base := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("ok")), Request: request}, nil
+	})
+	t.Run("DNS destination changes", func(t *testing.T) {
+		lookups := 0
+		client := ai.NewHTTPClient(ai.TransportConfig{
+			LookupIP: func(context.Context, string) ([]net.IPAddr, error) {
+				lookups++
+				if lookups == 1 {
+					return []net.IPAddr{{IP: net.ParseIP("203.0.113.10")}}, nil
+				}
+				return []net.IPAddr{{IP: net.ParseIP("127.0.0.1")}}, nil
+			},
+			Base: base,
+		})
+		request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://changing.example/v1", nil)
+		require.NoError(t, err)
+		response, err := client.Do(request)
+		require.NoError(t, err)
+		require.NoError(t, response.Body.Close())
+		request, err = http.NewRequestWithContext(context.Background(), http.MethodGet, "https://changing.example/v1", nil)
+		require.NoError(t, err)
+		_, err = client.Do(request)
+		require.ErrorContains(t, err, "private-network")
+	})
+
+	t.Run("explicit private access", func(t *testing.T) {
+		client := ai.NewHTTPClient(ai.TransportConfig{
+			AllowPrivateNetwork: true,
+			LookupIP: func(context.Context, string) ([]net.IPAddr, error) {
+				return []net.IPAddr{{IP: net.ParseIP("127.0.0.1")}}, nil
+			},
+			Base: base,
+		})
+		request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:8080/v1", nil)
+		require.NoError(t, err)
+		response, err := client.Do(request)
+		require.NoError(t, err)
+		require.NoError(t, response.Body.Close())
+	})
 }
 
 func TestProviderTransportBoundsRequestResponseAndTotalTime(t *testing.T) {

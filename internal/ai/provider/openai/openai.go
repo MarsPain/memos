@@ -142,7 +142,7 @@ func readStream(ctx context.Context, body io.ReadCloser, stream chan<- ai.Stream
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
-			stream <- ai.StreamEvent{Err: ctx.Err()}
+			sendStreamEvent(ctx, stream, ai.StreamEvent{Err: ctx.Err()})
 			return
 		default:
 		}
@@ -156,7 +156,7 @@ func readStream(ctx context.Context, body io.ReadCloser, stream chan<- ai.Stream
 		}
 		var payload streamResponse
 		if err := json.Unmarshal([]byte(data), &payload); err != nil {
-			stream <- ai.StreamEvent{Err: ai.NewProviderError(ai.ErrorMalformed, "AI provider returned malformed streaming data", err)}
+			sendStreamEvent(ctx, stream, ai.StreamEvent{Err: ai.NewProviderError(ai.ErrorMalformed, "AI provider returned malformed streaming data", err)})
 			return
 		}
 		event := ai.StreamEvent{}
@@ -169,10 +169,21 @@ func readStream(ctx context.Context, body io.ReadCloser, stream chan<- ai.Stream
 			usage := convertUsage(*payload.Usage)
 			event.Usage = &usage
 		}
-		stream <- event
+		if !sendStreamEvent(ctx, stream, event) {
+			return
+		}
 	}
 	if err := scanner.Err(); err != nil {
-		stream <- ai.StreamEvent{Err: ai.NewProviderError(ai.ErrorMalformed, "AI provider streaming response could not be read", err)}
+		sendStreamEvent(ctx, stream, ai.StreamEvent{Err: ai.NewProviderError(ai.ErrorMalformed, "AI provider streaming response could not be read", err)})
+	}
+}
+
+func sendStreamEvent(ctx context.Context, stream chan<- ai.StreamEvent, event ai.StreamEvent) bool {
+	select {
+	case stream <- event:
+		return true
+	case <-ctx.Done():
+		return false
 	}
 }
 

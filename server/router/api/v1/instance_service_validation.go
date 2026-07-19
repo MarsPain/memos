@@ -168,15 +168,44 @@ func readinessAfterSettingUpdate(setting, existing *storepb.InstanceAISetting) *
 	if setting.GetEmbedding().GetProviderId() != "" {
 		readiness.Embeddings = storepb.CapabilityState_UNVALIDATED
 	}
-	if existing != nil && existing.Readiness != nil &&
-		setting.GetGeneration().GetProviderId() == existing.GetGeneration().GetProviderId() &&
+	if existing == nil || existing.Readiness == nil {
+		return readiness
+	}
+	if setting.GetGeneration().GetProviderId() == existing.GetGeneration().GetProviderId() &&
 		setting.GetGeneration().GetModel() == existing.GetGeneration().GetModel() &&
-		setting.GetEmbedding().GetProviderId() == existing.GetEmbedding().GetProviderId() &&
+		sameProviderCallableConfig(setting.GetGeneration().GetProviderId(), setting, existing) {
+		readiness.TextGeneration = existing.Readiness.TextGeneration
+		readiness.Streaming = existing.Readiness.Streaming
+		readiness.StructuredTools = existing.Readiness.StructuredTools
+	}
+	if setting.GetEmbedding().GetProviderId() == existing.GetEmbedding().GetProviderId() &&
 		setting.GetEmbedding().GetModel() == existing.GetEmbedding().GetModel() &&
-		setting.GetEmbedding().GetDimensions() == existing.GetEmbedding().GetDimensions() {
-		return existing.Readiness
+		setting.GetEmbedding().GetDimensions() == existing.GetEmbedding().GetDimensions() &&
+		sameProviderCallableConfig(setting.GetEmbedding().GetProviderId(), setting, existing) {
+		readiness.Embeddings = existing.Readiness.Embeddings
 	}
 	return readiness
+}
+
+func sameProviderCallableConfig(providerID string, setting, existing *storepb.InstanceAISetting) bool {
+	if providerID == "" {
+		return true
+	}
+	find := func(providers []*storepb.AIProviderConfig) *storepb.AIProviderConfig {
+		for _, provider := range providers {
+			if provider.GetId() == providerID {
+				return provider
+			}
+		}
+		return nil
+	}
+	currentProvider := find(setting.GetProviders())
+	existingProvider := find(existing.GetProviders())
+	return currentProvider != nil && existingProvider != nil &&
+		currentProvider.GetType() == existingProvider.GetType() &&
+		currentProvider.GetEndpoint() == existingProvider.GetEndpoint() &&
+		currentProvider.GetApiKey() == existingProvider.GetApiKey() &&
+		currentProvider.GetAllowPrivateNetwork() == existingProvider.GetAllowPrivateNetwork()
 }
 
 func preparePersistedTranscriptionConfig(setting *storepb.InstanceAISetting, existing *storepb.InstanceAISetting) error {

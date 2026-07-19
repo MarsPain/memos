@@ -90,6 +90,47 @@ func TestInstanceAIConnectivityTestIsAdminOnlyAndSanitized(t *testing.T) {
 	require.NotContains(t, result.GetMessage(), "stored-secret")
 }
 
+func TestInstanceAIProviderEditInvalidatesOnlyReferencedCapabilities(t *testing.T) {
+	ctx := context.Background()
+	ts := NewTestService(t)
+	defer ts.Cleanup()
+
+	admin, err := ts.CreateHostUser(ctx, "admin")
+	require.NoError(t, err)
+	adminCtx := ts.CreateUserContext(ctx, admin.ID)
+	setting := &v1pb.InstanceSetting_AISetting{
+		Providers: []*v1pb.InstanceSetting_AIProviderConfig{
+			{Id: "generation", Title: "Generation", Type: v1pb.InstanceSetting_OPENAI, ApiKey: "generation-secret"},
+			{Id: "embedding", Title: "Embedding", Type: v1pb.InstanceSetting_OPENAI, ApiKey: "embedding-secret"},
+		},
+		Generation:                     &v1pb.InstanceSetting_GenerationConfig{ProviderId: "generation", Model: "chat"},
+		Embedding:                      &v1pb.InstanceSetting_EmbeddingConfig{ProviderId: "embedding", Model: "embed", Dimensions: 2},
+		ExternalProcessingAcknowledged: true,
+	}
+	_, err = ts.Service.UpdateInstanceSetting(adminCtx, &v1pb.UpdateInstanceSettingRequest{Setting: &v1pb.InstanceSetting{
+		Name: "instance/settings/AI", Value: &v1pb.InstanceSetting_AiSetting{AiSetting: setting},
+	}})
+	require.NoError(t, err)
+	ts.Service.AIModelFactory = func(ai.ProviderConfig, *http.Client) (ai.Model, error) { return &aitest.Model{}, nil }
+	for _, probe := range []*v1pb.TestInstanceAISettingRequest{
+		{Provider: setting.Providers[0], Capability: v1pb.InstanceSetting_TEXT_GENERATION, Model: "chat"},
+		{Provider: setting.Providers[1], Capability: v1pb.InstanceSetting_EMBEDDINGS, Model: "embed", Dimensions: 2},
+	} {
+		result, err := ts.Service.TestInstanceAISetting(adminCtx, probe)
+		require.NoError(t, err)
+		require.True(t, result.GetReady())
+	}
+
+	setting.Providers[0].Endpoint = "https://edited.example/v1"
+	setting.Providers[0].ApiKey = "edited-secret"
+	updated, err := ts.Service.UpdateInstanceSetting(adminCtx, &v1pb.UpdateInstanceSettingRequest{Setting: &v1pb.InstanceSetting{
+		Name: "instance/settings/AI", Value: &v1pb.InstanceSetting_AiSetting{AiSetting: setting},
+	}})
+	require.NoError(t, err)
+	require.Equal(t, v1pb.InstanceSetting_UNVALIDATED, updated.GetAiSetting().GetReadiness().GetTextGeneration())
+	require.Equal(t, v1pb.InstanceSetting_READY, updated.GetAiSetting().GetReadiness().GetEmbeddings())
+}
+
 func TestInstanceAISettingRejectsUnsafeOrInvalidAssignments(t *testing.T) {
 	ctx := context.Background()
 	ts := NewTestService(t)
