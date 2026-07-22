@@ -52,6 +52,11 @@ type APIV1Service struct {
 	// construct APIV1Service by struct literal still get a working service.
 	aiChatOnce sync.Once
 	aiChat     *serverai.Service
+
+	// memoReadOnce and memoRead lazily build the shared memo read seam for
+	// the same struct-literal reason as aiChat.
+	memoReadOnce sync.Once
+	memoRead     *memo.Service
 }
 
 func NewAPIV1Service(secret string, profile *profile.Profile, store *store.Store) *APIV1Service {
@@ -77,11 +82,20 @@ func NewAPIV1Service(secret string, profile *profile.Profile, store *store.Store
 // is built on first use and resolves the factory through an indirection.
 func (s *APIV1Service) chatService() *serverai.Service {
 	s.aiChatOnce.Do(func() {
-		s.aiChat = serverai.NewService(s.Store, memo.NewService(s.Store), func() gateway.ModelFactory {
+		s.aiChat = serverai.NewService(s.Store, s.memoReadService(), func() gateway.ModelFactory {
 			return s.AIModelFactory
 		})
 	})
 	return s.aiChat
+}
+
+// memoReadService lazily builds the shared memo read seam through which all
+// Memo read authorization, visibility and archived-state rules are enforced.
+func (s *APIV1Service) memoReadService() *memo.Service {
+	s.memoReadOnce.Do(func() {
+		s.memoRead = memo.NewService(s.Store)
+	})
+	return s.memoRead
 }
 
 // RegisterGateway registers the gRPC-Gateway and Connect handlers with the given Echo instance.

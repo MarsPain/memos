@@ -2,7 +2,7 @@
 
 Parent spec: [AI Chat And Retrieval](../../../docs/product-specs/ai-chat-retrieval.md)
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: none
 
 ## Outcome
@@ -48,3 +48,7 @@ cd web && pnpm lint && pnpm test
 ```
 
 Seam and RPC tests use deterministic model fakes; no live provider calls.
+
+## Comments
+
+Implemented in 63b4a14c: additive SendChatMessage/GetChatConversation RPCs with regenerated Go, TypeScript, and OpenAPI outputs; minimal `server/memo` read seam; naive substring retrieval scaffold (TODO issue 06) and in-memory conversation scaffold (TODO issue 03); web Chat page with citation chips and unavailable state. No diff under `server/router/mcp/`, no schema migration.

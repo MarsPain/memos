@@ -438,18 +438,5 @@ func (s *APIV1Service) checkAttachmentAccess(ctx context.Context, attachment *st
 	if err != nil {
 		return status.Errorf(codes.Internal, "failed to get memo: %v", err)
 	}
-	if memo == nil {
-		return status.Errorf(codes.NotFound, "memo not found")
-	}
-
-	if memo.Visibility == store.Public {
-		return nil
-	}
-	if user == nil {
-		return status.Errorf(codes.Unauthenticated, "user not authenticated")
-	}
-	if memo.Visibility == store.Private && memo.CreatorID != user.ID && !isSuperUser(user) {
-		return status.Errorf(codes.PermissionDenied, "permission denied")
-	}
-	return nil
+	return s.memoReadService().CheckRelatedReadAccess(user, memo)
 }

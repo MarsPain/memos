@@ -145,20 +145,15 @@ func (s *APIV1Service) ListMemoComments(ctx context.Context, request *v1pb.ListM
 	if memo == nil {
 		return nil, status.Errorf(codes.NotFound, "memo not found")
 	}
-	if err := s.checkMemoReadAccess(ctx, memo); err != nil {
-		return nil, err
-	}
 
 	currentUser, err := s.fetchCurrentUser(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get user")
 	}
-	var memoFilter string
-	if currentUser == nil {
-		memoFilter = `visibility == "PUBLIC"`
-	} else {
-		memoFilter = fmt.Sprintf(`creator_id == %d || visibility in ["PUBLIC", "PROTECTED"]`, currentUser.ID)
+	if err := s.memoReadService().CheckReadAccess(currentUser, memo); err != nil {
+		return nil, err
 	}
+	memoFilter := s.memoReadService().ReadableMemoFilter(currentUser)
 	memoRelationComment := store.MemoRelationComment
 	var limit, offset int
 	if request.PageToken != "" {

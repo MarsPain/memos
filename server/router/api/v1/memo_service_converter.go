@@ -179,12 +179,7 @@ func (s *APIV1Service) batchConvertMemoRelations(ctx context.Context, memos []*s
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get user")
 	}
-	var memoFilter string
-	if currentUser == nil {
-		memoFilter = `visibility == "PUBLIC"`
-	} else {
-		memoFilter = fmt.Sprintf(`creator_id == %d || visibility in ["PUBLIC", "PROTECTED"]`, currentUser.ID)
-	}
+	memoFilter := s.memoReadService().ReadableMemoFilter(currentUser)
 
 	memoIDs := make([]int32, len(memos))
 	memoIDSet := make(map[int32]bool, len(memos))

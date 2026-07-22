@@ -2,7 +2,7 @@
 
 Parent spec: [AI Chat And Retrieval](../../../docs/product-specs/ai-chat-retrieval.md)
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 01
 
 ## Outcome
@@ -31,3 +31,7 @@ go test -v -race ./server/...
 ```
 
 Run the existing Memo service test suite before and after and confirm identical results.
+
+## Comments
+
+Implemented in 5540febe: Memo read authorization, visibility and archived-state list rules, related-memo visibility filter, and searchable-source enumeration moved into `server/memo` behind CheckReadAccess, CheckRelatedReadAccess, ApplyReadScope, ReadableMemoFilter, and ListReadableMemos; MemoService read handlers, attachment access checks, and user-stats memo scoping rewired to the seam; store remains raw persistence. No new endpoints, no schema migration, no diff under `server/router/mcp/`.

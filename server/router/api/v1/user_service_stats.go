@@ -54,12 +54,10 @@ func (s *APIV1Service) listUsernamesByID(ctx context.Context, userIDs []int32) (
 }
 
 func (s *APIV1Service) ListAllUserStats(ctx context.Context, request *v1pb.ListAllUserStatsRequest) (*v1pb.ListAllUserStatsResponse, error) {
-	rowStatus := convertStateToStore(request.State)
 	memoFind := &store.FindMemo{
 		// Exclude comments by default.
 		ExcludeComments: true,
 		ExcludeContent:  true,
-		RowStatus:       &rowStatus,
 	}
 
 	currentUser, err := s.fetchCurrentUser(ctx)
@@ -74,21 +72,10 @@ func (s *APIV1Service) ListAllUserStats(ctx context.Context, request *v1pb.ListA
 		memoFind.Filters = append(memoFind.Filters, request.Filter)
 	}
 
-	if request.State == v1pb.State_ARCHIVED {
-		// Archived memos are only visible to their creator.
-		if currentUser == nil {
-			return &v1pb.ListAllUserStatsResponse{}, nil
-		}
-		memoFind.CreatorID = &currentUser.ID
-	} else if currentUser == nil {
-		memoFind.VisibilityList = []store.Visibility{store.Public}
-	} else {
-		if memoFind.CreatorID == nil {
-			filter := fmt.Sprintf(`creator_id == %d || visibility in ["PUBLIC", "PROTECTED"]`, currentUser.ID)
-			memoFind.Filters = append(memoFind.Filters, filter)
-		} else if *memoFind.CreatorID != currentUser.ID {
-			memoFind.VisibilityList = []store.Visibility{store.Public, store.Protected}
-		}
+	if !s.memoReadService().ApplyReadScope(memoFind, currentUser, request.State == v1pb.State_ARCHIVED) {
+		// Archived memos are only visible to their creator, so anonymous
+		// callers see empty stats.
+		return &v1pb.ListAllUserStatsResponse{}, nil
 	}
 
 	userMemoStatMap := make(map[int32]*v1pb.UserStats)
@@ -214,11 +201,7 @@ func (s *APIV1Service) GetUserStats(ctx context.Context, request *v1pb.GetUserSt
 		RowStatus:       &normalStatus,
 	}
 
-	if currentUser == nil {
-		memoFind.VisibilityList = []store.Visibility{store.Public}
-	} else if currentUser.ID != userID {
-		memoFind.VisibilityList = []store.Visibility{store.Public, store.Protected}
-	}
+	s.memoReadService().ApplyReadScope(memoFind, currentUser, false)
 
 	createdTimestamps := []*timestamppb.Timestamp{}
 	updatedTimestamps := []*timestamppb.Timestamp{}

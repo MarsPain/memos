@@ -22,22 +22,13 @@ func (s *APIV1Service) ListMemoReactions(ctx context.Context, request *v1pb.List
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get memo: %v", err)
 	}
-	if memo == nil {
-		return nil, status.Errorf(codes.NotFound, "memo not found")
-	}
 
-	// Check memo visibility.
-	if memo.Visibility != store.Public {
-		user, err := s.fetchCurrentUser(ctx)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to get user")
-		}
-		if user == nil {
-			return nil, status.Errorf(codes.Unauthenticated, "user not authenticated")
-		}
-		if memo.Visibility == store.Private && memo.CreatorID != user.ID && !isSuperUser(user) {
-			return nil, status.Errorf(codes.PermissionDenied, "permission denied")
-		}
+	user, err := s.fetchCurrentUser(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get user")
+	}
+	if err := s.memoReadService().CheckRelatedReadAccess(user, memo); err != nil {
+		return nil, err
 	}
 
 	reactions, err := s.Store.ListReactions(ctx, &store.FindReaction{

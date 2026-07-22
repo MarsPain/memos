@@ -36,37 +36,6 @@ func isSSESuppressed(ctx context.Context) bool {
 	return ok && v
 }
 
-func (s *APIV1Service) checkMemoReadAccess(ctx context.Context, memo *store.Memo) error {
-	if memo == nil {
-		return status.Errorf(codes.NotFound, "memo not found")
-	}
-
-	// Archived memos are only visible to their creator.
-	if memo.RowStatus == store.Archived {
-		user, err := s.fetchCurrentUser(ctx)
-		if err != nil {
-			return status.Errorf(codes.Internal, "failed to get user")
-		}
-		if user == nil || memo.CreatorID != user.ID {
-			return status.Errorf(codes.NotFound, "memo not found")
-		}
-	}
-
-	if memo.Visibility != store.Public {
-		user, err := s.fetchCurrentUser(ctx)
-		if err != nil {
-			return status.Errorf(codes.Internal, "failed to get user")
-		}
-		if user == nil {
-			return status.Errorf(codes.Unauthenticated, "user not authenticated")
-		}
-		if memo.Visibility == store.Private && memo.CreatorID != user.ID {
-			return status.Errorf(codes.PermissionDenied, "permission denied")
-		}
-	}
-	return nil
-}
-
 func (s *APIV1Service) CreateMemo(ctx context.Context, request *v1pb.CreateMemoRequest) (*v1pb.Memo, error) {
 	user, err := s.fetchCurrentUser(ctx)
 	if err != nil {
@@ -185,17 +154,10 @@ func (s *APIV1Service) ListMemos(ctx context.Context, request *v1pb.ListMemosReq
 		return nil, status.Errorf(codes.Internal, "failed to get user")
 	}
 
-	if request.State == v1pb.State_ARCHIVED {
-		state := store.Archived
-		memoFind.RowStatus = &state
-		// Archived memos are only visible to their creator.
-		if currentUser == nil {
-			return &v1pb.ListMemosResponse{}, nil
-		}
-		memoFind.CreatorID = &currentUser.ID
-	} else {
-		state := store.Normal
-		memoFind.RowStatus = &state
+	if !s.memoReadService().ApplyReadScope(memoFind, currentUser, request.State == v1pb.State_ARCHIVED) {
+		// Archived memos are only visible to their creator, so anonymous
+		// callers see an empty archived list.
+		return &v1pb.ListMemosResponse{}, nil
 	}
 
 	// Parse order_by field (replaces the old sort and direction fields)
@@ -213,17 +175,6 @@ func (s *APIV1Service) ListMemos(ctx context.Context, request *v1pb.ListMemosReq
 			return nil, status.Errorf(codes.InvalidArgument, "invalid filter: %v", err)
 		}
 		memoFind.Filters = append(memoFind.Filters, request.Filter)
-	}
-
-	if currentUser == nil {
-		memoFind.VisibilityList = []store.Visibility{store.Public}
-	} else {
-		if memoFind.CreatorID == nil {
-			filter := fmt.Sprintf(`creator_id == %d || visibility in ["PUBLIC", "PROTECTED"]`, currentUser.ID)
-			memoFind.Filters = append(memoFind.Filters, filter)
-		} else if *memoFind.CreatorID != currentUser.ID {
-			memoFind.VisibilityList = []store.Visibility{store.Public, store.Protected}
-		}
 	}
 
 	var limit, offset int
@@ -353,7 +304,11 @@ func (s *APIV1Service) GetMemo(ctx context.Context, request *v1pb.GetMemoRequest
 		return nil, status.Errorf(codes.NotFound, "memo not found")
 	}
 
-	if err := s.checkMemoReadAccess(ctx, memo); err != nil {
+	user, err := s.fetchCurrentUser(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get user")
+	}
+	if err := s.memoReadService().CheckReadAccess(user, memo); err != nil {
 		return nil, err
 	}
 	if memo.ParentUID != nil {
@@ -364,7 +319,7 @@ func (s *APIV1Service) GetMemo(ctx context.Context, request *v1pb.GetMemoRequest
 		if parentMemo == nil {
 			return nil, status.Errorf(codes.NotFound, "memo not found")
 		}
-		if err := s.checkMemoReadAccess(ctx, parentMemo); err != nil {
+		if err := s.memoReadService().CheckReadAccess(user, parentMemo); err != nil {
 			return nil, err
 		}
 	}
