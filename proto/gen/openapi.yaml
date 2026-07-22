@@ -6,6 +6,52 @@ info:
     title: ""
     version: 0.0.1
 paths:
+    /api/v1/ai/chat/conversation:
+        get:
+            tags:
+                - AIService
+            description: GetChatConversation returns the caller's AI chat conversation.
+            operationId: AIService_GetChatConversation
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ChatConversation'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/ai/chat:sendMessage:
+        post:
+            tags:
+                - AIService
+            description: |-
+                SendChatMessage sends a user message in the caller's AI chat conversation
+                 and returns the stored user message together with the assistant's reply.
+            operationId: AIService_SendChatMessage
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SendChatMessageRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SendChatMessageResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /api/v1/ai:transcribe:
         post:
             tags:
@@ -2494,6 +2540,56 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/User'
+        ChatCitation:
+            type: object
+            properties:
+                memo:
+                    type: string
+                    description: |-
+                        The resource name of the cited memo.
+                         Format: memos/{memo}
+                snippet:
+                    type: string
+                    description: The quoted source text from the memo.
+            description: ChatCitation references the memo a chat answer was grounded in.
+        ChatConversation:
+            type: object
+            properties:
+                messages:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ChatMessage'
+                    description: The messages in the conversation, in chronological order.
+                generationAvailable:
+                    type: boolean
+                    description: |-
+                        Whether the instance has a generation model configured.
+                         When false, the assistant cannot generate new replies.
+            description: ChatConversation is the caller's single conversation thread with the AI assistant.
+        ChatMessage:
+            type: object
+            properties:
+                role:
+                    enum:
+                        - ROLE_UNSPECIFIED
+                        - USER
+                        - ASSISTANT
+                    type: string
+                    description: The author of the message.
+                    format: enum
+                content:
+                    type: string
+                    description: The text content of the message.
+                createTime:
+                    type: string
+                    description: The time the message was created.
+                    format: date-time
+                citations:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ChatCitation'
+                    description: Source citations backing the message. Only set on assistant messages.
+            description: ChatMessage is a single message in an AI chat conversation.
         Color:
             type: object
             properties:
@@ -3636,6 +3732,25 @@ components:
                     type: string
                     description: When the access token expires.
                     format: date-time
+        SendChatMessageRequest:
+            required:
+                - content
+            type: object
+            properties:
+                content:
+                    type: string
+                    description: Required. The text content of the user's message.
+        SendChatMessageResponse:
+            type: object
+            properties:
+                userMessage:
+                    allOf:
+                        - $ref: '#/components/schemas/ChatMessage'
+                    description: The stored user message.
+                assistantMessage:
+                    allOf:
+                        - $ref: '#/components/schemas/ChatMessage'
+                    description: The assistant's reply message.
         SetMemoAttachmentsRequest:
             required:
                 - name

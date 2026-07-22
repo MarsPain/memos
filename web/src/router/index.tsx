@@ -28,6 +28,7 @@ const AdminSignIn = lazyWithReload(() => import("@/pages/AdminSignIn"));
 const About = lazyWithReload(() => import("@/pages/About"));
 const Archived = lazyWithReload(() => import("@/pages/Archived"));
 const AuthCallback = lazyWithReload(() => import("@/pages/AuthCallback"));
+const Chat = lazyWithReload(() => import("@/pages/Chat"));
 const Explore = lazyWithReload(() => import("@/pages/Explore"));
 const Home = lazyWithReload(() => import("@/pages/Home"));
 const Inboxes = lazyWithReload(() => import("@/pages/Inboxes"));
@@ -103,6 +104,7 @@ export const routeConfig: RouteObject[] = [
             element: <RequireAuthRoute />,
             children: [
               { path: Routes.ATTACHMENTS, element: <Attachments /> },
+              { path: Routes.CHAT, element: <Chat /> },
               { path: Routes.INBOX, element: <Inboxes /> },
               { path: Routes.SETTING, element: <Setting /> },
             ],

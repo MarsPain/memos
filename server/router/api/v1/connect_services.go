@@ -531,6 +531,22 @@ func (s *ConnectServiceHandler) Transcribe(ctx context.Context, req *connect.Req
 	return connect.NewResponse(resp), nil
 }
 
+func (s *ConnectServiceHandler) SendChatMessage(ctx context.Context, req *connect.Request[v1pb.SendChatMessageRequest]) (*connect.Response[v1pb.SendChatMessageResponse], error) {
+	resp, err := s.APIV1Service.SendChatMessage(ctx, req.Msg)
+	if err != nil {
+		return nil, convertGRPCError(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *ConnectServiceHandler) GetChatConversation(ctx context.Context, req *connect.Request[v1pb.GetChatConversationRequest]) (*connect.Response[v1pb.ChatConversation], error) {
+	resp, err := s.APIV1Service.GetChatConversation(ctx, req.Msg)
+	if err != nil {
+		return nil, convertGRPCError(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
 // ShortcutService
 
 func (s *ConnectServiceHandler) ListShortcuts(ctx context.Context, req *connect.Request[v1pb.ListShortcutsRequest]) (*connect.Response[v1pb.ListShortcutsResponse], error) {

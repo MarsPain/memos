@@ -71,6 +71,19 @@
       "title": "Unlinked uploads"
     }
   },
+  "chat": {
+    "assistant": "Assistant",
+    "empty": "Ask a question and the assistant will answer using your memos.",
+    "input-placeholder": "Ask a question about your memos...",
+    "load-failed": "Failed to load conversation",
+    "send": "Send",
+    "send-failed": "Failed to send message",
+    "title": "Chat",
+    "unavailable-description": "An administrator must configure a generation model in the instance settings before the assistant can answer questions.",
+    "unavailable-settings-link": "Go to instance settings",
+    "unavailable-title": "Chat is not available",
+    "you": "You"
+  },
   "common": {
     "about": "About",
     "add": "Add",
@@ -87,6 +100,7 @@
     "calendar": "Calendar",
     "cancel": "Cancel",
     "change": "Change",
+    "chat": "Chat",
     "clear": "Clear",
     "close": "Close",
     "collapse": "Collapse",

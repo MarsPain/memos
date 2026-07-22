@@ -35,12 +35,23 @@ const (
 const (
 	// AIServiceTranscribeProcedure is the fully-qualified name of the AIService's Transcribe RPC.
 	AIServiceTranscribeProcedure = "/memos.api.v1.AIService/Transcribe"
+	// AIServiceSendChatMessageProcedure is the fully-qualified name of the AIService's SendChatMessage
+	// RPC.
+	AIServiceSendChatMessageProcedure = "/memos.api.v1.AIService/SendChatMessage"
+	// AIServiceGetChatConversationProcedure is the fully-qualified name of the AIService's
+	// GetChatConversation RPC.
+	AIServiceGetChatConversationProcedure = "/memos.api.v1.AIService/GetChatConversation"
 )
 
 // AIServiceClient is a client for the memos.api.v1.AIService service.
 type AIServiceClient interface {
 	// Transcribe transcribes an audio file using an instance AI provider.
 	Transcribe(context.Context, *connect.Request[v1.TranscribeRequest]) (*connect.Response[v1.TranscribeResponse], error)
+	// SendChatMessage sends a user message in the caller's AI chat conversation
+	// and returns the stored user message together with the assistant's reply.
+	SendChatMessage(context.Context, *connect.Request[v1.SendChatMessageRequest]) (*connect.Response[v1.SendChatMessageResponse], error)
+	// GetChatConversation returns the caller's AI chat conversation.
+	GetChatConversation(context.Context, *connect.Request[v1.GetChatConversationRequest]) (*connect.Response[v1.ChatConversation], error)
 }
 
 // NewAIServiceClient constructs a client for the memos.api.v1.AIService service. By default, it
@@ -60,12 +71,26 @@ func NewAIServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...c
 			connect.WithSchema(aIServiceMethods.ByName("Transcribe")),
 			connect.WithClientOptions(opts...),
 		),
+		sendChatMessage: connect.NewClient[v1.SendChatMessageRequest, v1.SendChatMessageResponse](
+			httpClient,
+			baseURL+AIServiceSendChatMessageProcedure,
+			connect.WithSchema(aIServiceMethods.ByName("SendChatMessage")),
+			connect.WithClientOptions(opts...),
+		),
+		getChatConversation: connect.NewClient[v1.GetChatConversationRequest, v1.ChatConversation](
+			httpClient,
+			baseURL+AIServiceGetChatConversationProcedure,
+			connect.WithSchema(aIServiceMethods.ByName("GetChatConversation")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // aIServiceClient implements AIServiceClient.
 type aIServiceClient struct {
-	transcribe *connect.Client[v1.TranscribeRequest, v1.TranscribeResponse]
+	transcribe          *connect.Client[v1.TranscribeRequest, v1.TranscribeResponse]
+	sendChatMessage     *connect.Client[v1.SendChatMessageRequest, v1.SendChatMessageResponse]
+	getChatConversation *connect.Client[v1.GetChatConversationRequest, v1.ChatConversation]
 }
 
 // Transcribe calls memos.api.v1.AIService.Transcribe.
@@ -73,10 +98,25 @@ func (c *aIServiceClient) Transcribe(ctx context.Context, req *connect.Request[v
 	return c.transcribe.CallUnary(ctx, req)
 }
 
+// SendChatMessage calls memos.api.v1.AIService.SendChatMessage.
+func (c *aIServiceClient) SendChatMessage(ctx context.Context, req *connect.Request[v1.SendChatMessageRequest]) (*connect.Response[v1.SendChatMessageResponse], error) {
+	return c.sendChatMessage.CallUnary(ctx, req)
+}
+
+// GetChatConversation calls memos.api.v1.AIService.GetChatConversation.
+func (c *aIServiceClient) GetChatConversation(ctx context.Context, req *connect.Request[v1.GetChatConversationRequest]) (*connect.Response[v1.ChatConversation], error) {
+	return c.getChatConversation.CallUnary(ctx, req)
+}
+
 // AIServiceHandler is an implementation of the memos.api.v1.AIService service.
 type AIServiceHandler interface {
 	// Transcribe transcribes an audio file using an instance AI provider.
 	Transcribe(context.Context, *connect.Request[v1.TranscribeRequest]) (*connect.Response[v1.TranscribeResponse], error)
+	// SendChatMessage sends a user message in the caller's AI chat conversation
+	// and returns the stored user message together with the assistant's reply.
+	SendChatMessage(context.Context, *connect.Request[v1.SendChatMessageRequest]) (*connect.Response[v1.SendChatMessageResponse], error)
+	// GetChatConversation returns the caller's AI chat conversation.
+	GetChatConversation(context.Context, *connect.Request[v1.GetChatConversationRequest]) (*connect.Response[v1.ChatConversation], error)
 }
 
 // NewAIServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -92,10 +132,26 @@ func NewAIServiceHandler(svc AIServiceHandler, opts ...connect.HandlerOption) (s
 		connect.WithSchema(aIServiceMethods.ByName("Transcribe")),
 		connect.WithHandlerOptions(opts...),
 	)
+	aIServiceSendChatMessageHandler := connect.NewUnaryHandler(
+		AIServiceSendChatMessageProcedure,
+		svc.SendChatMessage,
+		connect.WithSchema(aIServiceMethods.ByName("SendChatMessage")),
+		connect.WithHandlerOptions(opts...),
+	)
+	aIServiceGetChatConversationHandler := connect.NewUnaryHandler(
+		AIServiceGetChatConversationProcedure,
+		svc.GetChatConversation,
+		connect.WithSchema(aIServiceMethods.ByName("GetChatConversation")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/memos.api.v1.AIService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AIServiceTranscribeProcedure:
 			aIServiceTranscribeHandler.ServeHTTP(w, r)
+		case AIServiceSendChatMessageProcedure:
+			aIServiceSendChatMessageHandler.ServeHTTP(w, r)
+		case AIServiceGetChatConversationProcedure:
+			aIServiceGetChatConversationHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -107,4 +163,12 @@ type UnimplementedAIServiceHandler struct{}
 
 func (UnimplementedAIServiceHandler) Transcribe(context.Context, *connect.Request[v1.TranscribeRequest]) (*connect.Response[v1.TranscribeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("memos.api.v1.AIService.Transcribe is not implemented"))
+}
+
+func (UnimplementedAIServiceHandler) SendChatMessage(context.Context, *connect.Request[v1.SendChatMessageRequest]) (*connect.Response[v1.SendChatMessageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("memos.api.v1.AIService.SendChatMessage is not implemented"))
+}
+
+func (UnimplementedAIServiceHandler) GetChatConversation(context.Context, *connect.Request[v1.GetChatConversationRequest]) (*connect.Response[v1.ChatConversation], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("memos.api.v1.AIService.GetChatConversation is not implemented"))
 }

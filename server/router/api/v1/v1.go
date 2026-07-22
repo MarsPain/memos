@@ -3,6 +3,7 @@ package v1
 import (
 	"context"
 	"net/http"
+	"sync"
 
 	"connectrpc.com/connect"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -13,7 +14,9 @@ import (
 	"github.com/usememos/memos/internal/markdown"
 	"github.com/usememos/memos/internal/profile"
 	v1pb "github.com/usememos/memos/proto/gen/api/v1"
+	serverai "github.com/usememos/memos/server/ai"
 	"github.com/usememos/memos/server/auth"
+	"github.com/usememos/memos/server/memo"
 	"github.com/usememos/memos/server/notification"
 	"github.com/usememos/memos/store"
 )
@@ -44,6 +47,11 @@ type APIV1Service struct {
 
 	// instanceStatsCache memoizes GetInstanceStats results for instanceStatsCacheTTL.
 	instanceStatsCache instanceStatsCache
+
+	// aiChatOnce and aiChat lazily build the chat service so tests that
+	// construct APIV1Service by struct literal still get a working service.
+	aiChatOnce sync.Once
+	aiChat     *serverai.Service
 }
 
 func NewAPIV1Service(secret string, profile *profile.Profile, store *store.Store) *APIV1Service {
@@ -62,6 +70,18 @@ func NewAPIV1Service(secret string, profile *profile.Profile, store *store.Store
 		thumbnailSemaphore:       semaphore.NewWeighted(3), // Limit to 3 concurrent thumbnail generations
 		imageProcessingSemaphore: semaphore.NewWeighted(2),
 	}
+}
+
+// chatService lazily builds the AI chat service. Tests construct APIV1Service
+// by struct literal and may override AIModelFactory afterwards, so the service
+// is built on first use and resolves the factory through an indirection.
+func (s *APIV1Service) chatService() *serverai.Service {
+	s.aiChatOnce.Do(func() {
+		s.aiChat = serverai.NewService(s.Store, memo.NewService(s.Store), func() gateway.ModelFactory {
+			return s.AIModelFactory
+		})
+	})
+	return s.aiChat
 }
 
 // RegisterGateway registers the gRPC-Gateway and Connect handlers with the given Echo instance.
