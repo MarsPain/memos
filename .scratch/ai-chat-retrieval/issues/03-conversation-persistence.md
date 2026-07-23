@@ -2,7 +2,7 @@
 
 Parent spec: [AI Chat And Retrieval](../../../docs/product-specs/ai-chat-retrieval.md)
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 01
 
 ## Outcome
@@ -37,3 +37,16 @@ go test -v -race ./server/...
 ```
 
 Persistence tests cover complete/failed/cancelled/retry flows, duplicate request IDs, and deletion during an active attempt.
+
+## Comments
+
+Implemented in 2b91caea: ai_conversation/ai_message migrations for SQLite, MySQL, and PostgreSQL plus LATEST.sql;
+owner-scoped store layer with atomic user-message-plus-attempt creation and cascading deletion; chat flow routed
+through the store with request-ID idempotency (repeats return the existing pair, retries add attempts to the same
+user message), statuses STREAMING/COMPLETE/FAILED/CANCELLED, delete-cancels-active-attempt, and restart
+reconciliation of interrupted attempts to FAILED; CreateChatConversation/ListChatConversations/
+DeleteChatConversation RPCs; Chat page conversation list with create/delete. Scaffold B removed.
+
+Notes for issue 04: a delete landing between conversation lookup and attempt registration cannot cancel that send
+(documented in server/ai/chat.go); on drivers with foreign keys disabled it may leave orphaned ai_message rows,
+which all read paths ignore. Harden with the streaming/cancellation lifecycle work.
