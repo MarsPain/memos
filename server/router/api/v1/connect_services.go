@@ -539,8 +539,32 @@ func (s *ConnectServiceHandler) SendChatMessage(ctx context.Context, req *connec
 	return connect.NewResponse(resp), nil
 }
 
+func (s *ConnectServiceHandler) CreateChatConversation(ctx context.Context, req *connect.Request[v1pb.CreateChatConversationRequest]) (*connect.Response[v1pb.ChatConversation], error) {
+	resp, err := s.APIV1Service.CreateChatConversation(ctx, req.Msg)
+	if err != nil {
+		return nil, convertGRPCError(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *ConnectServiceHandler) ListChatConversations(ctx context.Context, req *connect.Request[v1pb.ListChatConversationsRequest]) (*connect.Response[v1pb.ListChatConversationsResponse], error) {
+	resp, err := s.APIV1Service.ListChatConversations(ctx, req.Msg)
+	if err != nil {
+		return nil, convertGRPCError(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
 func (s *ConnectServiceHandler) GetChatConversation(ctx context.Context, req *connect.Request[v1pb.GetChatConversationRequest]) (*connect.Response[v1pb.ChatConversation], error) {
 	resp, err := s.APIV1Service.GetChatConversation(ctx, req.Msg)
+	if err != nil {
+		return nil, convertGRPCError(err)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *ConnectServiceHandler) DeleteChatConversation(ctx context.Context, req *connect.Request[v1pb.DeleteChatConversationRequest]) (*connect.Response[emptypb.Empty], error) {
+	resp, err := s.APIV1Service.DeleteChatConversation(ctx, req.Msg)
 	if err != nil {
 		return nil, convertGRPCError(err)
 	}

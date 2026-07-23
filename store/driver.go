@@ -83,4 +83,16 @@ type Driver interface {
 	CreateUserIdentity(ctx context.Context, create *UserIdentity) (*UserIdentity, error)
 	ListUserIdentities(ctx context.Context, find *FindUserIdentity) ([]*UserIdentity, error)
 	DeleteUserIdentities(ctx context.Context, delete *DeleteUserIdentity) error
+
+	// AIConversation model related methods.
+	CreateAIConversation(ctx context.Context, create *AIConversation) (*AIConversation, error)
+	ListAIConversations(ctx context.Context, find *FindAIConversation) ([]*AIConversation, error)
+	UpdateAIConversation(ctx context.Context, update *UpdateAIConversation) error
+	DeleteAIConversation(ctx context.Context, delete *DeleteAIConversation) error
+
+	// AIMessage model related methods.
+	CreateAIMessageWithAttempt(ctx context.Context, message *AIMessage, attempt *AIMessage) (*AIMessage, *AIMessage, error)
+	CreateAIMessageAttempt(ctx context.Context, attempt *AIMessage) (*AIMessage, error)
+	ListAIMessages(ctx context.Context, find *FindAIMessage) ([]*AIMessage, error)
+	UpdateAIMessage(ctx context.Context, update *UpdateAIMessage) error
 }

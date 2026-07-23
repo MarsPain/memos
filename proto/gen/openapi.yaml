@@ -6,12 +6,38 @@ info:
     title: ""
     version: 0.0.1
 paths:
-    /api/v1/ai/chat/conversation:
+    /api/v1/ai/chat/conversations:
         get:
             tags:
                 - AIService
-            description: GetChatConversation returns the caller's AI chat conversation.
-            operationId: AIService_GetChatConversation
+            description: |-
+                ListChatConversations lists the caller's AI chat conversations, most
+                 recently updated first. Messages are not populated.
+            operationId: AIService_ListChatConversations
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListChatConversationsResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+        post:
+            tags:
+                - AIService
+            description: CreateChatConversation creates a new AI chat conversation owned by the caller.
+            operationId: AIService_CreateChatConversation
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateChatConversationRequest'
+                required: true
             responses:
                 "200":
                     description: OK
@@ -25,14 +51,74 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
-    /api/v1/ai/chat:sendMessage:
+    /api/v1/ai/{ai}/*:
+        get:
+            tags:
+                - AIService
+            description: |-
+                GetChatConversation returns one of the caller's AI chat conversations
+                 with its messages.
+            operationId: AIService_GetChatConversation
+            parameters:
+                - name: ai
+                  in: path
+                  description: The ai id.
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ChatConversation'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+        delete:
+            tags:
+                - AIService
+            description: |-
+                DeleteChatConversation deletes one of the caller's AI chat conversations.
+                 An attempt still generating is cancelled.
+            operationId: AIService_DeleteChatConversation
+            parameters:
+                - name: ai
+                  in: path
+                  description: The ai id.
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content: {}
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/ai/{ai}/*:sendMessage:
         post:
             tags:
                 - AIService
             description: |-
-                SendChatMessage sends a user message in the caller's AI chat conversation
-                 and returns the stored user message together with the assistant's reply.
+                SendChatMessage sends a user message in one of the caller's AI chat
+                 conversations and returns the stored user message together with the
+                 assistant's reply attempt.
             operationId: AIService_SendChatMessage
+            parameters:
+                - name: ai
+                  in: path
+                  description: The ai id.
+                  required: true
+                  schema:
+                    type: string
             requestBody:
                 content:
                     application/json:
@@ -2559,13 +2645,33 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/ChatMessage'
-                    description: The messages in the conversation, in chronological order.
+                    description: |-
+                        The messages in the conversation, in chronological order. Populated by
+                         GetChatConversation only.
                 generationAvailable:
                     type: boolean
                     description: |-
                         Whether the instance has a generation model configured.
                          When false, the assistant cannot generate new replies.
-            description: ChatConversation is the caller's single conversation thread with the AI assistant.
+                name:
+                    type: string
+                    description: |-
+                        The resource name of the conversation.
+                         Format: ai/conversations/{conversation}
+                title:
+                    type: string
+                    description: |-
+                        The conversation title. Derived from the first user message when the
+                         conversation was created without one.
+                createTime:
+                    type: string
+                    description: The time the conversation was created.
+                    format: date-time
+                updateTime:
+                    type: string
+                    description: The last time the conversation or its messages changed.
+                    format: date-time
+            description: ChatConversation is a private AI chat conversation owned by a user.
         ChatMessage:
             type: object
             properties:
@@ -2579,7 +2685,9 @@ components:
                     format: enum
                 content:
                     type: string
-                    description: The text content of the message.
+                    description: |-
+                        The visible text content of the message. Hidden provider reasoning is
+                         neither requested nor stored.
                 createTime:
                     type: string
                     description: The time the message was created.
@@ -2589,6 +2697,25 @@ components:
                     items:
                         $ref: '#/components/schemas/ChatCitation'
                     description: Source citations backing the message. Only set on assistant messages.
+                status:
+                    enum:
+                        - STATUS_UNSPECIFIED
+                        - STREAMING
+                        - COMPLETE
+                        - FAILED
+                        - CANCELLED
+                    type: string
+                    description: The lifecycle status of the message.
+                    format: enum
+                attempt:
+                    type: integer
+                    description: |-
+                        The attempt number of an assistant message answering its user message;
+                         0 for user messages.
+                    format: int32
+                clientRequestId:
+                    type: string
+                    description: The client request ID of a user message; empty for assistant messages.
             description: ChatMessage is a single message in an AI chat conversation.
         Color:
             type: object
@@ -2745,6 +2872,14 @@ components:
                      };
 
                      // ...
+        CreateChatConversationRequest:
+            type: object
+            properties:
+                title:
+                    type: string
+                    description: |-
+                        Optional. The conversation title; derived from the first user message
+                         when empty.
         CreateLinkedIdentityRequest:
             required:
                 - parent
@@ -3263,6 +3398,19 @@ components:
                     description: |-
                         A token that can be sent as `page_token` to retrieve the next page.
                          If this field is omitted, there are no subsequent pages.
+        ListChatConversationsResponse:
+            type: object
+            properties:
+                conversations:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ChatConversation'
+                    description: |-
+                        The caller's conversations, most recently updated first. Messages are
+                         not populated.
+                generationAvailable:
+                    type: boolean
+                    description: Whether the instance has a generation model configured.
         ListIdentityProvidersResponse:
             type: object
             properties:
@@ -3735,11 +3883,25 @@ components:
         SendChatMessageRequest:
             required:
                 - content
+                - conversation
+                - requestId
             type: object
             properties:
                 content:
                     type: string
                     description: Required. The text content of the user's message.
+                conversation:
+                    type: string
+                    description: |-
+                        Required. The resource name of the conversation the message belongs to.
+                         Format: ai/conversations/{conversation}
+                requestId:
+                    type: string
+                    description: |-
+                        Required. Client-generated request ID, unique within the conversation.
+                         Repeating it returns the existing user message and its active or
+                         completed attempt; repeating it after the attempt failed or was
+                         cancelled creates a new attempt on the same user message.
         SendChatMessageResponse:
             type: object
             properties:
@@ -3750,7 +3912,7 @@ components:
                 assistantMessage:
                     allOf:
                         - $ref: '#/components/schemas/ChatMessage'
-                    description: The assistant's reply message.
+                    description: The assistant's reply attempt.
         SetMemoAttachmentsRequest:
             required:
                 - name

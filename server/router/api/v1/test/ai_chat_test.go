@@ -16,6 +16,29 @@ import (
 	"github.com/usememos/memos/store"
 )
 
+func configureChatGeneration(ctx context.Context, t *testing.T, ts *TestService) {
+	t.Helper()
+	_, err := ts.Store.UpsertInstanceSetting(ctx, &storepb.InstanceSetting{
+		Key: storepb.InstanceSettingKey_AI,
+		Value: &storepb.InstanceSetting_AiSetting{AiSetting: &storepb.InstanceAISetting{
+			Providers: []*storepb.AIProviderConfig{{
+				Id: "p", Title: "P", Type: storepb.AIProviderType_OPENAI,
+				Endpoint: "https://api.example.com/v1", ApiKey: "sk-test",
+			}},
+			Generation: &storepb.GenerationConfig{ProviderId: "p", Model: "chat-model"},
+		}},
+	})
+	require.NoError(t, err)
+}
+
+func createChatConversation(ctx context.Context, t *testing.T, ts *TestService, userCtx context.Context) *v1pb.ChatConversation {
+	t.Helper()
+	conversation, err := ts.Service.CreateChatConversation(userCtx, &v1pb.CreateChatConversationRequest{})
+	require.NoError(t, err)
+	require.NotEmpty(t, conversation.GetName())
+	return conversation
+}
+
 func TestSendChatMessage(t *testing.T) {
 	ctx := context.Background()
 
@@ -23,7 +46,7 @@ func TestSendChatMessage(t *testing.T) {
 		ts := NewTestService(t)
 		defer ts.Cleanup()
 
-		_, err := ts.Service.SendChatMessage(ctx, &v1pb.SendChatMessageRequest{Content: "hello"})
+		_, err := ts.Service.SendChatMessage(ctx, &v1pb.SendChatMessageRequest{Conversation: "ai/conversations/abc", Content: "hello", RequestId: "req-1"})
 		require.Equal(t, codes.Unauthenticated, status.Code(err))
 	})
 
@@ -34,26 +57,37 @@ func TestSendChatMessage(t *testing.T) {
 		user, err := ts.CreateRegularUser(ctx, "alice")
 		require.NoError(t, err)
 		userCtx := ts.CreateUserContext(ctx, user.ID)
+		conversation := createChatConversation(ctx, t, ts, userCtx)
 
-		_, err = ts.Service.SendChatMessage(userCtx, &v1pb.SendChatMessageRequest{Content: "hello"})
+		_, err = ts.Service.SendChatMessage(userCtx, &v1pb.SendChatMessageRequest{Conversation: conversation.GetName(), Content: "hello", RequestId: "req-1"})
 		require.Equal(t, codes.FailedPrecondition, status.Code(err))
 
-		conversation, err := ts.Service.GetChatConversation(userCtx, &v1pb.GetChatConversationRequest{})
+		fetched, err := ts.Service.GetChatConversation(userCtx, &v1pb.GetChatConversationRequest{Name: conversation.GetName()})
 		require.NoError(t, err)
-		require.False(t, conversation.GetGenerationAvailable())
-		require.Empty(t, conversation.GetMessages())
+		require.False(t, fetched.GetGenerationAvailable())
+		require.Empty(t, fetched.GetMessages())
 	})
 
-	t.Run("rejects empty content", func(t *testing.T) {
+	t.Run("rejects invalid requests", func(t *testing.T) {
 		ts := NewTestService(t)
 		defer ts.Cleanup()
 
 		user, err := ts.CreateRegularUser(ctx, "alice")
 		require.NoError(t, err)
 		userCtx := ts.CreateUserContext(ctx, user.ID)
+		conversation := createChatConversation(ctx, t, ts, userCtx)
 
-		_, err = ts.Service.SendChatMessage(userCtx, &v1pb.SendChatMessageRequest{Content: "  "})
+		_, err = ts.Service.SendChatMessage(userCtx, &v1pb.SendChatMessageRequest{Conversation: conversation.GetName(), Content: "  ", RequestId: "req-1"})
 		require.Equal(t, codes.InvalidArgument, status.Code(err))
+
+		_, err = ts.Service.SendChatMessage(userCtx, &v1pb.SendChatMessageRequest{Conversation: conversation.GetName(), Content: "hello"})
+		require.Equal(t, codes.InvalidArgument, status.Code(err))
+
+		_, err = ts.Service.SendChatMessage(userCtx, &v1pb.SendChatMessageRequest{Conversation: "memos/abc", Content: "hello", RequestId: "req-1"})
+		require.Equal(t, codes.InvalidArgument, status.Code(err))
+
+		_, err = ts.Service.SendChatMessage(userCtx, &v1pb.SendChatMessageRequest{Conversation: "ai/conversations/missing", Content: "hello", RequestId: "req-1"})
+		require.Equal(t, codes.NotFound, status.Code(err))
 	})
 
 	t.Run("returns grounded answer with citations", func(t *testing.T) {
@@ -71,18 +105,7 @@ func TestSendChatMessage(t *testing.T) {
 			Visibility: store.Public,
 		})
 		require.NoError(t, err)
-
-		_, err = ts.Store.UpsertInstanceSetting(ctx, &storepb.InstanceSetting{
-			Key: storepb.InstanceSettingKey_AI,
-			Value: &storepb.InstanceSetting_AiSetting{AiSetting: &storepb.InstanceAISetting{
-				Providers: []*storepb.AIProviderConfig{{
-					Id: "p", Title: "P", Type: storepb.AIProviderType_OPENAI,
-					Endpoint: "https://api.example.com/v1", ApiKey: "sk-test",
-				}},
-				Generation: &storepb.GenerationConfig{ProviderId: "p", Model: "chat-model"},
-			}},
-		})
-		require.NoError(t, err)
+		configureChatGeneration(ctx, t, ts)
 
 		// AIModelFactory is overridden after struct-literal construction; the
 		// chat service must pick it up through lazy initialization.
@@ -91,30 +114,122 @@ func TestSendChatMessage(t *testing.T) {
 			return fake, nil
 		}
 
-		response, err := ts.Service.SendChatMessage(userCtx, &v1pb.SendChatMessageRequest{Content: "Where should I go hiking"})
+		conversation := createChatConversation(ctx, t, ts, userCtx)
+		response, err := ts.Service.SendChatMessage(userCtx, &v1pb.SendChatMessageRequest{
+			Conversation: conversation.GetName(),
+			Content:      "Where should I go hiking",
+			RequestId:    "req-1",
+		})
 		require.NoError(t, err)
 		require.Equal(t, v1pb.ChatMessage_USER, response.GetUserMessage().GetRole())
+		require.Equal(t, v1pb.ChatMessage_COMPLETE, response.GetUserMessage().GetStatus())
 		require.Equal(t, "Where should I go hiking", response.GetUserMessage().GetContent())
+		require.Equal(t, "req-1", response.GetUserMessage().GetClientRequestId())
 		require.NotNil(t, response.GetUserMessage().GetCreateTime())
 		require.Equal(t, v1pb.ChatMessage_ASSISTANT, response.GetAssistantMessage().GetRole())
+		require.Equal(t, v1pb.ChatMessage_COMPLETE, response.GetAssistantMessage().GetStatus())
+		require.Equal(t, int32(1), response.GetAssistantMessage().GetAttempt())
 		require.Equal(t, "The alpine lakes trail is your favorite hiking spot.", response.GetAssistantMessage().GetContent())
 		require.Len(t, response.GetAssistantMessage().GetCitations(), 1)
 		require.Equal(t, "memos/"+memo.UID, response.GetAssistantMessage().GetCitations()[0].GetMemo())
 		require.NotEmpty(t, response.GetAssistantMessage().GetCitations()[0].GetSnippet())
 
-		conversation, err := ts.Service.GetChatConversation(userCtx, &v1pb.GetChatConversationRequest{})
+		fetched, err := ts.Service.GetChatConversation(userCtx, &v1pb.GetChatConversationRequest{Name: conversation.GetName()})
 		require.NoError(t, err)
-		require.True(t, conversation.GetGenerationAvailable())
-		require.Len(t, conversation.GetMessages(), 2)
-		require.Equal(t, v1pb.ChatMessage_USER, conversation.GetMessages()[0].GetRole())
-		require.Equal(t, v1pb.ChatMessage_ASSISTANT, conversation.GetMessages()[1].GetRole())
+		require.True(t, fetched.GetGenerationAvailable())
+		require.Equal(t, "Where should I go hiking", fetched.GetTitle())
+		require.Len(t, fetched.GetMessages(), 2)
+		require.Equal(t, v1pb.ChatMessage_USER, fetched.GetMessages()[0].GetRole())
+		require.Equal(t, v1pb.ChatMessage_ASSISTANT, fetched.GetMessages()[1].GetRole())
+
+		// A repeated request ID returns the stored pair without regenerating.
+		duplicate, err := ts.Service.SendChatMessage(userCtx, &v1pb.SendChatMessageRequest{
+			Conversation: conversation.GetName(),
+			Content:      "Where should I go hiking",
+			RequestId:    "req-1",
+		})
+		require.NoError(t, err)
+		require.Equal(t, response.GetAssistantMessage().GetContent(), duplicate.GetAssistantMessage().GetContent())
+		require.Len(t, fake.GenerationRequests, 1)
 	})
 
 	t.Run("conversation requires authentication", func(t *testing.T) {
 		ts := NewTestService(t)
 		defer ts.Cleanup()
 
-		_, err := ts.Service.GetChatConversation(ctx, &v1pb.GetChatConversationRequest{})
+		_, err := ts.Service.GetChatConversation(ctx, &v1pb.GetChatConversationRequest{Name: "ai/conversations/abc"})
 		require.Equal(t, codes.Unauthenticated, status.Code(err))
+	})
+}
+
+func TestChatConversations(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("create list and delete", func(t *testing.T) {
+		ts := NewTestService(t)
+		defer ts.Cleanup()
+
+		user, err := ts.CreateRegularUser(ctx, "alice")
+		require.NoError(t, err)
+		userCtx := ts.CreateUserContext(ctx, user.ID)
+
+		first := createChatConversation(ctx, t, ts, userCtx)
+		second, err := ts.Service.CreateChatConversation(userCtx, &v1pb.CreateChatConversationRequest{Title: "trip planning"})
+		require.NoError(t, err)
+		require.Equal(t, "trip planning", second.GetTitle())
+
+		list, err := ts.Service.ListChatConversations(userCtx, &v1pb.ListChatConversationsRequest{})
+		require.NoError(t, err)
+		require.Len(t, list.GetConversations(), 2)
+		require.False(t, list.GetGenerationAvailable())
+		require.Empty(t, list.GetConversations()[0].GetMessages())
+
+		_, err = ts.Service.DeleteChatConversation(userCtx, &v1pb.DeleteChatConversationRequest{Name: first.GetName()})
+		require.NoError(t, err)
+
+		_, err = ts.Service.GetChatConversation(userCtx, &v1pb.GetChatConversationRequest{Name: first.GetName()})
+		require.Equal(t, codes.NotFound, status.Code(err))
+
+		list, err = ts.Service.ListChatConversations(userCtx, &v1pb.ListChatConversationsRequest{})
+		require.NoError(t, err)
+		require.Len(t, list.GetConversations(), 1)
+		require.Equal(t, second.GetName(), list.GetConversations()[0].GetName())
+	})
+
+	t.Run("rejects invalid names", func(t *testing.T) {
+		ts := NewTestService(t)
+		defer ts.Cleanup()
+
+		user, err := ts.CreateRegularUser(ctx, "alice")
+		require.NoError(t, err)
+		userCtx := ts.CreateUserContext(ctx, user.ID)
+
+		_, err = ts.Service.GetChatConversation(userCtx, &v1pb.GetChatConversationRequest{Name: "memos/abc"})
+		require.Equal(t, codes.InvalidArgument, status.Code(err))
+		_, err = ts.Service.DeleteChatConversation(userCtx, &v1pb.DeleteChatConversationRequest{Name: "ai/conversations/"})
+		require.Equal(t, codes.InvalidArgument, status.Code(err))
+	})
+
+	t.Run("conversations are owner scoped", func(t *testing.T) {
+		ts := NewTestService(t)
+		defer ts.Cleanup()
+
+		alice, err := ts.CreateRegularUser(ctx, "alice")
+		require.NoError(t, err)
+		aliceCtx := ts.CreateUserContext(ctx, alice.ID)
+		bob, err := ts.CreateRegularUser(ctx, "bob")
+		require.NoError(t, err)
+		bobCtx := ts.CreateUserContext(ctx, bob.ID)
+
+		conversation := createChatConversation(ctx, t, ts, aliceCtx)
+
+		_, err = ts.Service.GetChatConversation(bobCtx, &v1pb.GetChatConversationRequest{Name: conversation.GetName()})
+		require.Equal(t, codes.NotFound, status.Code(err))
+		_, err = ts.Service.DeleteChatConversation(bobCtx, &v1pb.DeleteChatConversationRequest{Name: conversation.GetName()})
+		require.Equal(t, codes.NotFound, status.Code(err))
+
+		list, err := ts.Service.ListChatConversations(bobCtx, &v1pb.ListChatConversationsRequest{})
+		require.NoError(t, err)
+		require.Empty(t, list.GetConversations())
 	})
 }

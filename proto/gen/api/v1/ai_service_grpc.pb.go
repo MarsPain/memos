@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -19,9 +20,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AIService_Transcribe_FullMethodName          = "/memos.api.v1.AIService/Transcribe"
-	AIService_SendChatMessage_FullMethodName     = "/memos.api.v1.AIService/SendChatMessage"
-	AIService_GetChatConversation_FullMethodName = "/memos.api.v1.AIService/GetChatConversation"
+	AIService_Transcribe_FullMethodName             = "/memos.api.v1.AIService/Transcribe"
+	AIService_CreateChatConversation_FullMethodName = "/memos.api.v1.AIService/CreateChatConversation"
+	AIService_ListChatConversations_FullMethodName  = "/memos.api.v1.AIService/ListChatConversations"
+	AIService_GetChatConversation_FullMethodName    = "/memos.api.v1.AIService/GetChatConversation"
+	AIService_DeleteChatConversation_FullMethodName = "/memos.api.v1.AIService/DeleteChatConversation"
+	AIService_SendChatMessage_FullMethodName        = "/memos.api.v1.AIService/SendChatMessage"
 )
 
 // AIServiceClient is the client API for AIService service.
@@ -30,11 +34,21 @@ const (
 type AIServiceClient interface {
 	// Transcribe transcribes an audio file using an instance AI provider.
 	Transcribe(ctx context.Context, in *TranscribeRequest, opts ...grpc.CallOption) (*TranscribeResponse, error)
-	// SendChatMessage sends a user message in the caller's AI chat conversation
-	// and returns the stored user message together with the assistant's reply.
-	SendChatMessage(ctx context.Context, in *SendChatMessageRequest, opts ...grpc.CallOption) (*SendChatMessageResponse, error)
-	// GetChatConversation returns the caller's AI chat conversation.
+	// CreateChatConversation creates a new AI chat conversation owned by the caller.
+	CreateChatConversation(ctx context.Context, in *CreateChatConversationRequest, opts ...grpc.CallOption) (*ChatConversation, error)
+	// ListChatConversations lists the caller's AI chat conversations, most
+	// recently updated first. Messages are not populated.
+	ListChatConversations(ctx context.Context, in *ListChatConversationsRequest, opts ...grpc.CallOption) (*ListChatConversationsResponse, error)
+	// GetChatConversation returns one of the caller's AI chat conversations
+	// with its messages.
 	GetChatConversation(ctx context.Context, in *GetChatConversationRequest, opts ...grpc.CallOption) (*ChatConversation, error)
+	// DeleteChatConversation deletes one of the caller's AI chat conversations.
+	// An attempt still generating is cancelled.
+	DeleteChatConversation(ctx context.Context, in *DeleteChatConversationRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	// SendChatMessage sends a user message in one of the caller's AI chat
+	// conversations and returns the stored user message together with the
+	// assistant's reply attempt.
+	SendChatMessage(ctx context.Context, in *SendChatMessageRequest, opts ...grpc.CallOption) (*SendChatMessageResponse, error)
 }
 
 type aIServiceClient struct {
@@ -55,10 +69,20 @@ func (c *aIServiceClient) Transcribe(ctx context.Context, in *TranscribeRequest,
 	return out, nil
 }
 
-func (c *aIServiceClient) SendChatMessage(ctx context.Context, in *SendChatMessageRequest, opts ...grpc.CallOption) (*SendChatMessageResponse, error) {
+func (c *aIServiceClient) CreateChatConversation(ctx context.Context, in *CreateChatConversationRequest, opts ...grpc.CallOption) (*ChatConversation, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SendChatMessageResponse)
-	err := c.cc.Invoke(ctx, AIService_SendChatMessage_FullMethodName, in, out, cOpts...)
+	out := new(ChatConversation)
+	err := c.cc.Invoke(ctx, AIService_CreateChatConversation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *aIServiceClient) ListChatConversations(ctx context.Context, in *ListChatConversationsRequest, opts ...grpc.CallOption) (*ListChatConversationsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListChatConversationsResponse)
+	err := c.cc.Invoke(ctx, AIService_ListChatConversations_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -75,17 +99,47 @@ func (c *aIServiceClient) GetChatConversation(ctx context.Context, in *GetChatCo
 	return out, nil
 }
 
+func (c *aIServiceClient) DeleteChatConversation(ctx context.Context, in *DeleteChatConversationRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, AIService_DeleteChatConversation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *aIServiceClient) SendChatMessage(ctx context.Context, in *SendChatMessageRequest, opts ...grpc.CallOption) (*SendChatMessageResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SendChatMessageResponse)
+	err := c.cc.Invoke(ctx, AIService_SendChatMessage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AIServiceServer is the server API for AIService service.
 // All implementations must embed UnimplementedAIServiceServer
 // for forward compatibility.
 type AIServiceServer interface {
 	// Transcribe transcribes an audio file using an instance AI provider.
 	Transcribe(context.Context, *TranscribeRequest) (*TranscribeResponse, error)
-	// SendChatMessage sends a user message in the caller's AI chat conversation
-	// and returns the stored user message together with the assistant's reply.
-	SendChatMessage(context.Context, *SendChatMessageRequest) (*SendChatMessageResponse, error)
-	// GetChatConversation returns the caller's AI chat conversation.
+	// CreateChatConversation creates a new AI chat conversation owned by the caller.
+	CreateChatConversation(context.Context, *CreateChatConversationRequest) (*ChatConversation, error)
+	// ListChatConversations lists the caller's AI chat conversations, most
+	// recently updated first. Messages are not populated.
+	ListChatConversations(context.Context, *ListChatConversationsRequest) (*ListChatConversationsResponse, error)
+	// GetChatConversation returns one of the caller's AI chat conversations
+	// with its messages.
 	GetChatConversation(context.Context, *GetChatConversationRequest) (*ChatConversation, error)
+	// DeleteChatConversation deletes one of the caller's AI chat conversations.
+	// An attempt still generating is cancelled.
+	DeleteChatConversation(context.Context, *DeleteChatConversationRequest) (*emptypb.Empty, error)
+	// SendChatMessage sends a user message in one of the caller's AI chat
+	// conversations and returns the stored user message together with the
+	// assistant's reply attempt.
+	SendChatMessage(context.Context, *SendChatMessageRequest) (*SendChatMessageResponse, error)
 	mustEmbedUnimplementedAIServiceServer()
 }
 
@@ -99,11 +153,20 @@ type UnimplementedAIServiceServer struct{}
 func (UnimplementedAIServiceServer) Transcribe(context.Context, *TranscribeRequest) (*TranscribeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Transcribe not implemented")
 }
-func (UnimplementedAIServiceServer) SendChatMessage(context.Context, *SendChatMessageRequest) (*SendChatMessageResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SendChatMessage not implemented")
+func (UnimplementedAIServiceServer) CreateChatConversation(context.Context, *CreateChatConversationRequest) (*ChatConversation, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateChatConversation not implemented")
+}
+func (UnimplementedAIServiceServer) ListChatConversations(context.Context, *ListChatConversationsRequest) (*ListChatConversationsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListChatConversations not implemented")
 }
 func (UnimplementedAIServiceServer) GetChatConversation(context.Context, *GetChatConversationRequest) (*ChatConversation, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetChatConversation not implemented")
+}
+func (UnimplementedAIServiceServer) DeleteChatConversation(context.Context, *DeleteChatConversationRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteChatConversation not implemented")
+}
+func (UnimplementedAIServiceServer) SendChatMessage(context.Context, *SendChatMessageRequest) (*SendChatMessageResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SendChatMessage not implemented")
 }
 func (UnimplementedAIServiceServer) mustEmbedUnimplementedAIServiceServer() {}
 func (UnimplementedAIServiceServer) testEmbeddedByValue()                   {}
@@ -144,20 +207,38 @@ func _AIService_Transcribe_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AIService_SendChatMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SendChatMessageRequest)
+func _AIService_CreateChatConversation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateChatConversationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(AIServiceServer).SendChatMessage(ctx, in)
+		return srv.(AIServiceServer).CreateChatConversation(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: AIService_SendChatMessage_FullMethodName,
+		FullMethod: AIService_CreateChatConversation_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AIServiceServer).SendChatMessage(ctx, req.(*SendChatMessageRequest))
+		return srv.(AIServiceServer).CreateChatConversation(ctx, req.(*CreateChatConversationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AIService_ListChatConversations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListChatConversationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).ListChatConversations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_ListChatConversations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).ListChatConversations(ctx, req.(*ListChatConversationsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -180,6 +261,42 @@ func _AIService_GetChatConversation_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AIService_DeleteChatConversation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteChatConversationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).DeleteChatConversation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_DeleteChatConversation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).DeleteChatConversation(ctx, req.(*DeleteChatConversationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AIService_SendChatMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendChatMessageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).SendChatMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_SendChatMessage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).SendChatMessage(ctx, req.(*SendChatMessageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AIService_ServiceDesc is the grpc.ServiceDesc for AIService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -192,12 +309,24 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AIService_Transcribe_Handler,
 		},
 		{
-			MethodName: "SendChatMessage",
-			Handler:    _AIService_SendChatMessage_Handler,
+			MethodName: "CreateChatConversation",
+			Handler:    _AIService_CreateChatConversation_Handler,
+		},
+		{
+			MethodName: "ListChatConversations",
+			Handler:    _AIService_ListChatConversations_Handler,
 		},
 		{
 			MethodName: "GetChatConversation",
 			Handler:    _AIService_GetChatConversation_Handler,
+		},
+		{
+			MethodName: "DeleteChatConversation",
+			Handler:    _AIService_DeleteChatConversation_Handler,
+		},
+		{
+			MethodName: "SendChatMessage",
+			Handler:    _AIService_SendChatMessage_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

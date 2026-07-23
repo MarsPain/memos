@@ -72,16 +72,26 @@
     }
   },
   "chat": {
+    "answer-cancelled": "The answer was cancelled.",
+    "answer-failed": "The answer failed. Send your message again to retry.",
     "assistant": "Assistant",
+    "create-failed": "Failed to create conversation",
+    "delete-confirm": "Delete this conversation?",
+    "delete-confirm-description": "This conversation and its messages will be permanently deleted. This cannot be undone.",
+    "delete-failed": "Failed to delete conversation",
     "empty": "Ask a question and the assistant will answer using your memos.",
+    "generating": "Generating...",
     "input-placeholder": "Ask a question about your memos...",
     "load-failed": "Failed to load conversation",
+    "new-chat": "New chat",
+    "no-conversations": "No conversations yet. Start a new chat to ask questions about your memos.",
     "send": "Send",
     "send-failed": "Failed to send message",
     "title": "Chat",
     "unavailable-description": "An administrator must configure a generation model in the instance settings before the assistant can answer questions.",
     "unavailable-settings-link": "Go to instance settings",
     "unavailable-title": "Chat is not available",
+    "untitled": "Untitled conversation",
     "you": "You"
   },
   "common": {

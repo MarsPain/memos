@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package memos.store;
+
+option go_package = "gen/store";
+
+// AIMessagePayload carries the variable metadata of an AI chat message:
+// model provenance, usage, citations, and the normalized failure category.
+// Hidden provider reasoning is never stored here.
+message AIMessagePayload {
+  // Citation references the memo an assistant answer was grounded in.
+  message Citation {
+    // The UID of the cited memo.
+    string memo_uid = 1;
+    // The quoted source text from the memo.
+    string snippet = 2;
+  }
+
+  // The provider ID that produced the message.
+  string provider_id = 1;
+
+  // The model name that produced the message.
+  string model = 2;
+
+  // Provider-reported token usage where available.
+  int32 input_tokens = 3;
+  int32 output_tokens = 4;
+  int32 total_tokens = 5;
+
+  // Source citations backing an assistant message.
+  repeated Citation citations = 6;
+
+  // The normalized error category when the attempt failed.
+  string error = 7;
+}

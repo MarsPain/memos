@@ -7,15 +7,15 @@ import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf
 import { file_google_api_annotations } from "../../google/api/annotations_pb";
 import { file_google_api_client } from "../../google/api/client_pb";
 import { file_google_api_field_behavior } from "../../google/api/field_behavior_pb";
-import type { Timestamp } from "@bufbuild/protobuf/wkt";
-import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
+import type { EmptySchema, Timestamp } from "@bufbuild/protobuf/wkt";
+import { file_google_protobuf_empty, file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file api/v1/ai_service.proto.
  */
 export const file_api_v1_ai_service: GenFile = /*@__PURE__*/
-  fileDesc("ChdhcGkvdjEvYWlfc2VydmljZS5wcm90bxIMbWVtb3MuYXBpLnYxIkkKEVRyYW5zY3JpYmVSZXF1ZXN0EjQKBWF1ZGlvGAEgASgLMiAubWVtb3MuYXBpLnYxLlRyYW5zY3JpcHRpb25BdWRpb0ID4EECIncKElRyYW5zY3JpcHRpb25BdWRpbxIWCgdjb250ZW50GAEgASgMQgPgQQRIABINCgN1cmkYAiABKAlIABIVCghmaWxlbmFtZRgDIAEoCUID4EEBEhkKDGNvbnRlbnRfdHlwZRgEIAEoCUID4EEBQggKBnNvdXJjZSIiChJUcmFuc2NyaWJlUmVzcG9uc2USDAoEdGV4dBgBIAEoCSLjAQoLQ2hhdE1lc3NhZ2USLAoEcm9sZRgBIAEoDjIeLm1lbW9zLmFwaS52MS5DaGF0TWVzc2FnZS5Sb2xlEg8KB2NvbnRlbnQYAiABKAkSLwoLY3JlYXRlX3RpbWUYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi0KCWNpdGF0aW9ucxgEIAMoCzIaLm1lbW9zLmFwaS52MS5DaGF0Q2l0YXRpb24iNQoEUm9sZRIUChBST0xFX1VOU1BFQ0lGSUVEEAASCAoEVVNFUhABEg0KCUFTU0lTVEFOVBACIi0KDENoYXRDaXRhdGlvbhIMCgRtZW1vGAEgASgJEg8KB3NuaXBwZXQYAiABKAkiXQoQQ2hhdENvbnZlcnNhdGlvbhIrCghtZXNzYWdlcxgBIAMoCzIZLm1lbW9zLmFwaS52MS5DaGF0TWVzc2FnZRIcChRnZW5lcmF0aW9uX2F2YWlsYWJsZRgCIAEoCCIuChZTZW5kQ2hhdE1lc3NhZ2VSZXF1ZXN0EhQKB2NvbnRlbnQYASABKAlCA+BBAiKAAQoXU2VuZENoYXRNZXNzYWdlUmVzcG9uc2USLwoMdXNlcl9tZXNzYWdlGAEgASgLMhkubWVtb3MuYXBpLnYxLkNoYXRNZXNzYWdlEjQKEWFzc2lzdGFudF9tZXNzYWdlGAIgASgLMhkubWVtb3MuYXBpLnYxLkNoYXRNZXNzYWdlIhwKGkdldENoYXRDb252ZXJzYXRpb25SZXF1ZXN0MqQDCglBSVNlcnZpY2USeQoKVHJhbnNjcmliZRIfLm1lbW9zLmFwaS52MS5UcmFuc2NyaWJlUmVxdWVzdBogLm1lbW9zLmFwaS52MS5UcmFuc2NyaWJlUmVzcG9uc2UiKNpBBWF1ZGlvgtPkkwIaOgEqIhUvYXBpL3YxL2FpOnRyYW5zY3JpYmUSkAEKD1NlbmRDaGF0TWVzc2FnZRIkLm1lbW9zLmFwaS52MS5TZW5kQ2hhdE1lc3NhZ2VSZXF1ZXN0GiUubWVtb3MuYXBpLnYxLlNlbmRDaGF0TWVzc2FnZVJlc3BvbnNlIjDaQQdjb250ZW50gtPkkwIgOgEqIhsvYXBpL3YxL2FpL2NoYXQ6c2VuZE1lc3NhZ2USiAEKE0dldENoYXRDb252ZXJzYXRpb24SKC5tZW1vcy5hcGkudjEuR2V0Q2hhdENvbnZlcnNhdGlvblJlcXVlc3QaHi5tZW1vcy5hcGkudjEuQ2hhdENvbnZlcnNhdGlvbiIn2kEAgtPkkwIeEhwvYXBpL3YxL2FpL2NoYXQvY29udmVyc2F0aW9uQqYBChBjb20ubWVtb3MuYXBpLnYxQg5BaVNlcnZpY2VQcm90b1ABWjBnaXRodWIuY29tL3VzZW1lbW9zL21lbW9zL3Byb3RvL2dlbi9hcGkvdjE7YXBpdjGiAgNNQViqAgxNZW1vcy5BcGkuVjHKAgxNZW1vc1xBcGlcVjHiAhhNZW1vc1xBcGlcVjFcR1BCTWV0YWRhdGHqAg5NZW1vczo6QXBpOjpWMWIGcHJvdG8z", [file_google_api_annotations, file_google_api_client, file_google_api_field_behavior, file_google_protobuf_timestamp]);
+  fileDesc("ChdhcGkvdjEvYWlfc2VydmljZS5wcm90bxIMbWVtb3MuYXBpLnYxIkkKEVRyYW5zY3JpYmVSZXF1ZXN0EjQKBWF1ZGlvGAEgASgLMiAubWVtb3MuYXBpLnYxLlRyYW5zY3JpcHRpb25BdWRpb0ID4EECIncKElRyYW5zY3JpcHRpb25BdWRpbxIWCgdjb250ZW50GAEgASgMQgPgQQRIABINCgN1cmkYAiABKAlIABIVCghmaWxlbmFtZRgDIAEoCUID4EEBEhkKDGNvbnRlbnRfdHlwZRgEIAEoCUID4EEBQggKBnNvdXJjZSIiChJUcmFuc2NyaWJlUmVzcG9uc2USDAoEdGV4dBgBIAEoCSKbAwoLQ2hhdE1lc3NhZ2USLAoEcm9sZRgBIAEoDjIeLm1lbW9zLmFwaS52MS5DaGF0TWVzc2FnZS5Sb2xlEg8KB2NvbnRlbnQYAiABKAkSLwoLY3JlYXRlX3RpbWUYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi0KCWNpdGF0aW9ucxgEIAMoCzIaLm1lbW9zLmFwaS52MS5DaGF0Q2l0YXRpb24SMAoGc3RhdHVzGAUgASgOMiAubWVtb3MuYXBpLnYxLkNoYXRNZXNzYWdlLlN0YXR1cxIPCgdhdHRlbXB0GAYgASgFEhkKEWNsaWVudF9yZXF1ZXN0X2lkGAcgASgJIjUKBFJvbGUSFAoQUk9MRV9VTlNQRUNJRklFRBAAEggKBFVTRVIQARINCglBU1NJU1RBTlQQAiJYCgZTdGF0dXMSFgoSU1RBVFVTX1VOU1BFQ0lGSUVEEAASDQoJU1RSRUFNSU5HEAESDAoIQ09NUExFVEUQAhIKCgZGQUlMRUQQAxINCglDQU5DRUxMRUQQBCItCgxDaGF0Q2l0YXRpb24SDAoEbWVtbxgBIAEoCRIPCgdzbmlwcGV0GAIgASgJItwBChBDaGF0Q29udmVyc2F0aW9uEisKCG1lc3NhZ2VzGAEgAygLMhkubWVtb3MuYXBpLnYxLkNoYXRNZXNzYWdlEhwKFGdlbmVyYXRpb25fYXZhaWxhYmxlGAIgASgIEgwKBG5hbWUYAyABKAkSDQoFdGl0bGUYBCABKAkSLwoLY3JlYXRlX3RpbWUYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi8KC3VwZGF0ZV90aW1lGAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIzCh1DcmVhdGVDaGF0Q29udmVyc2F0aW9uUmVxdWVzdBISCgV0aXRsZRgBIAEoCUID4EEBIh4KHExpc3RDaGF0Q29udmVyc2F0aW9uc1JlcXVlc3QidAodTGlzdENoYXRDb252ZXJzYXRpb25zUmVzcG9uc2USNQoNY29udmVyc2F0aW9ucxgBIAMoCzIeLm1lbW9zLmFwaS52MS5DaGF0Q29udmVyc2F0aW9uEhwKFGdlbmVyYXRpb25fYXZhaWxhYmxlGAIgASgIIi8KGkdldENoYXRDb252ZXJzYXRpb25SZXF1ZXN0EhEKBG5hbWUYASABKAlCA+BBAiIyCh1EZWxldGVDaGF0Q29udmVyc2F0aW9uUmVxdWVzdBIRCgRuYW1lGAEgASgJQgPgQQIiYgoWU2VuZENoYXRNZXNzYWdlUmVxdWVzdBIUCgdjb250ZW50GAEgASgJQgPgQQISGQoMY29udmVyc2F0aW9uGAIgASgJQgPgQQISFwoKcmVxdWVzdF9pZBgDIAEoCUID4EECIoABChdTZW5kQ2hhdE1lc3NhZ2VSZXNwb25zZRIvCgx1c2VyX21lc3NhZ2UYASABKAsyGS5tZW1vcy5hcGkudjEuQ2hhdE1lc3NhZ2USNAoRYXNzaXN0YW50X21lc3NhZ2UYAiABKAsyGS5tZW1vcy5hcGkudjEuQ2hhdE1lc3NhZ2UyowcKCUFJU2VydmljZRJ5CgpUcmFuc2NyaWJlEh8ubWVtb3MuYXBpLnYxLlRyYW5zY3JpYmVSZXF1ZXN0GiAubWVtb3MuYXBpLnYxLlRyYW5zY3JpYmVSZXNwb25zZSIo2kEFYXVkaW+C0+STAho6ASoiFS9hcGkvdjEvYWk6dHJhbnNjcmliZRKSAQoWQ3JlYXRlQ2hhdENvbnZlcnNhdGlvbhIrLm1lbW9zLmFwaS52MS5DcmVhdGVDaGF0Q29udmVyc2F0aW9uUmVxdWVzdBoeLm1lbW9zLmFwaS52MS5DaGF0Q29udmVyc2F0aW9uIivaQQCC0+STAiI6ASoiHS9hcGkvdjEvYWkvY2hhdC9jb252ZXJzYXRpb25zEpoBChVMaXN0Q2hhdENvbnZlcnNhdGlvbnMSKi5tZW1vcy5hcGkudjEuTGlzdENoYXRDb252ZXJzYXRpb25zUmVxdWVzdBorLm1lbW9zLmFwaS52MS5MaXN0Q2hhdENvbnZlcnNhdGlvbnNSZXNwb25zZSIo2kEAgtPkkwIfEh0vYXBpL3YxL2FpL2NoYXQvY29udmVyc2F0aW9ucxKRAQoTR2V0Q2hhdENvbnZlcnNhdGlvbhIoLm1lbW9zLmFwaS52MS5HZXRDaGF0Q29udmVyc2F0aW9uUmVxdWVzdBoeLm1lbW9zLmFwaS52MS5DaGF0Q29udmVyc2F0aW9uIjDaQQRuYW1lgtPkkwIjEiEvYXBpL3YxL3tuYW1lPWFpL2NvbnZlcnNhdGlvbnMvKn0SjwEKFkRlbGV0ZUNoYXRDb252ZXJzYXRpb24SKy5tZW1vcy5hcGkudjEuRGVsZXRlQ2hhdENvbnZlcnNhdGlvblJlcXVlc3QaFi5nb29nbGUucHJvdG9idWYuRW1wdHkiMNpBBG5hbWWC0+STAiMqIS9hcGkvdjEve25hbWU9YWkvY29udmVyc2F0aW9ucy8qfRLCAQoPU2VuZENoYXRNZXNzYWdlEiQubWVtb3MuYXBpLnYxLlNlbmRDaGF0TWVzc2FnZVJlcXVlc3QaJS5tZW1vcy5hcGkudjEuU2VuZENoYXRNZXNzYWdlUmVzcG9uc2UiYtpBH2NvbnZlcnNhdGlvbixjb250ZW50LHJlcXVlc3RfaWSC0+STAjo6ASoiNS9hcGkvdjEve2NvbnZlcnNhdGlvbj1haS9jb252ZXJzYXRpb25zLyp9OnNlbmRNZXNzYWdlQqYBChBjb20ubWVtb3MuYXBpLnYxQg5BaVNlcnZpY2VQcm90b1ABWjBnaXRodWIuY29tL3VzZW1lbW9zL21lbW9zL3Byb3RvL2dlbi9hcGkvdjE7YXBpdjGiAgNNQViqAgxNZW1vcy5BcGkuVjHKAgxNZW1vc1xBcGlcVjHiAhhNZW1vc1xBcGlcVjFcR1BCTWV0YWRhdGHqAg5NZW1vczo6QXBpOjpWMWIGcHJvdG8z", [file_google_api_annotations, file_google_api_client, file_google_api_field_behavior, file_google_protobuf_empty, file_google_protobuf_timestamp]);
 
 /**
  * @generated from message memos.api.v1.TranscribeRequest
@@ -116,7 +116,8 @@ export type ChatMessage = Message<"memos.api.v1.ChatMessage"> & {
   role: ChatMessage_Role;
 
   /**
-   * The text content of the message.
+   * The visible text content of the message. Hidden provider reasoning is
+   * neither requested nor stored.
    *
    * @generated from field: string content = 2;
    */
@@ -135,6 +136,28 @@ export type ChatMessage = Message<"memos.api.v1.ChatMessage"> & {
    * @generated from field: repeated memos.api.v1.ChatCitation citations = 4;
    */
   citations: ChatCitation[];
+
+  /**
+   * The lifecycle status of the message.
+   *
+   * @generated from field: memos.api.v1.ChatMessage.Status status = 5;
+   */
+  status: ChatMessage_Status;
+
+  /**
+   * The attempt number of an assistant message answering its user message;
+   * 0 for user messages.
+   *
+   * @generated from field: int32 attempt = 6;
+   */
+  attempt: number;
+
+  /**
+   * The client request ID of a user message; empty for assistant messages.
+   *
+   * @generated from field: string client_request_id = 7;
+   */
+  clientRequestId: string;
 };
 
 /**
@@ -177,6 +200,52 @@ export const ChatMessage_RoleSchema: GenEnum<ChatMessage_Role> = /*@__PURE__*/
   enumDesc(file_api_v1_ai_service, 3, 0);
 
 /**
+ * Status is the lifecycle state of a chat message.
+ *
+ * @generated from enum memos.api.v1.ChatMessage.Status
+ */
+export enum ChatMessage_Status {
+  /**
+   * @generated from enum value: STATUS_UNSPECIFIED = 0;
+   */
+  STATUS_UNSPECIFIED = 0,
+
+  /**
+   * The assistant is still generating the message.
+   *
+   * @generated from enum value: STREAMING = 1;
+   */
+  STREAMING = 1,
+
+  /**
+   * The message is complete.
+   *
+   * @generated from enum value: COMPLETE = 2;
+   */
+  COMPLETE = 2,
+
+  /**
+   * Generation failed; the message carries no visible content.
+   *
+   * @generated from enum value: FAILED = 3;
+   */
+  FAILED = 3,
+
+  /**
+   * Generation was cancelled before completion.
+   *
+   * @generated from enum value: CANCELLED = 4;
+   */
+  CANCELLED = 4,
+}
+
+/**
+ * Describes the enum memos.api.v1.ChatMessage.Status.
+ */
+export const ChatMessage_StatusSchema: GenEnum<ChatMessage_Status> = /*@__PURE__*/
+  enumDesc(file_api_v1_ai_service, 3, 1);
+
+/**
  * ChatCitation references the memo a chat answer was grounded in.
  *
  * @generated from message memos.api.v1.ChatCitation
@@ -206,13 +275,14 @@ export const ChatCitationSchema: GenMessage<ChatCitation> = /*@__PURE__*/
   messageDesc(file_api_v1_ai_service, 4);
 
 /**
- * ChatConversation is the caller's single conversation thread with the AI assistant.
+ * ChatConversation is a private AI chat conversation owned by a user.
  *
  * @generated from message memos.api.v1.ChatConversation
  */
 export type ChatConversation = Message<"memos.api.v1.ChatConversation"> & {
   /**
-   * The messages in the conversation, in chronological order.
+   * The messages in the conversation, in chronological order. Populated by
+   * GetChatConversation only.
    *
    * @generated from field: repeated memos.api.v1.ChatMessage messages = 1;
    */
@@ -225,6 +295,36 @@ export type ChatConversation = Message<"memos.api.v1.ChatConversation"> & {
    * @generated from field: bool generation_available = 2;
    */
   generationAvailable: boolean;
+
+  /**
+   * The resource name of the conversation.
+   * Format: ai/conversations/{conversation}
+   *
+   * @generated from field: string name = 3;
+   */
+  name: string;
+
+  /**
+   * The conversation title. Derived from the first user message when the
+   * conversation was created without one.
+   *
+   * @generated from field: string title = 4;
+   */
+  title: string;
+
+  /**
+   * The time the conversation was created.
+   *
+   * @generated from field: google.protobuf.Timestamp create_time = 5;
+   */
+  createTime?: Timestamp | undefined;
+
+  /**
+   * The last time the conversation or its messages changed.
+   *
+   * @generated from field: google.protobuf.Timestamp update_time = 6;
+   */
+  updateTime?: Timestamp | undefined;
 };
 
 /**
@@ -233,6 +333,106 @@ export type ChatConversation = Message<"memos.api.v1.ChatConversation"> & {
  */
 export const ChatConversationSchema: GenMessage<ChatConversation> = /*@__PURE__*/
   messageDesc(file_api_v1_ai_service, 5);
+
+/**
+ * @generated from message memos.api.v1.CreateChatConversationRequest
+ */
+export type CreateChatConversationRequest = Message<"memos.api.v1.CreateChatConversationRequest"> & {
+  /**
+   * Optional. The conversation title; derived from the first user message
+   * when empty.
+   *
+   * @generated from field: string title = 1;
+   */
+  title: string;
+};
+
+/**
+ * Describes the message memos.api.v1.CreateChatConversationRequest.
+ * Use `create(CreateChatConversationRequestSchema)` to create a new message.
+ */
+export const CreateChatConversationRequestSchema: GenMessage<CreateChatConversationRequest> = /*@__PURE__*/
+  messageDesc(file_api_v1_ai_service, 6);
+
+/**
+ * @generated from message memos.api.v1.ListChatConversationsRequest
+ */
+export type ListChatConversationsRequest = Message<"memos.api.v1.ListChatConversationsRequest"> & {
+};
+
+/**
+ * Describes the message memos.api.v1.ListChatConversationsRequest.
+ * Use `create(ListChatConversationsRequestSchema)` to create a new message.
+ */
+export const ListChatConversationsRequestSchema: GenMessage<ListChatConversationsRequest> = /*@__PURE__*/
+  messageDesc(file_api_v1_ai_service, 7);
+
+/**
+ * @generated from message memos.api.v1.ListChatConversationsResponse
+ */
+export type ListChatConversationsResponse = Message<"memos.api.v1.ListChatConversationsResponse"> & {
+  /**
+   * The caller's conversations, most recently updated first. Messages are
+   * not populated.
+   *
+   * @generated from field: repeated memos.api.v1.ChatConversation conversations = 1;
+   */
+  conversations: ChatConversation[];
+
+  /**
+   * Whether the instance has a generation model configured.
+   *
+   * @generated from field: bool generation_available = 2;
+   */
+  generationAvailable: boolean;
+};
+
+/**
+ * Describes the message memos.api.v1.ListChatConversationsResponse.
+ * Use `create(ListChatConversationsResponseSchema)` to create a new message.
+ */
+export const ListChatConversationsResponseSchema: GenMessage<ListChatConversationsResponse> = /*@__PURE__*/
+  messageDesc(file_api_v1_ai_service, 8);
+
+/**
+ * @generated from message memos.api.v1.GetChatConversationRequest
+ */
+export type GetChatConversationRequest = Message<"memos.api.v1.GetChatConversationRequest"> & {
+  /**
+   * Required. The resource name of the conversation.
+   * Format: ai/conversations/{conversation}
+   *
+   * @generated from field: string name = 1;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message memos.api.v1.GetChatConversationRequest.
+ * Use `create(GetChatConversationRequestSchema)` to create a new message.
+ */
+export const GetChatConversationRequestSchema: GenMessage<GetChatConversationRequest> = /*@__PURE__*/
+  messageDesc(file_api_v1_ai_service, 9);
+
+/**
+ * @generated from message memos.api.v1.DeleteChatConversationRequest
+ */
+export type DeleteChatConversationRequest = Message<"memos.api.v1.DeleteChatConversationRequest"> & {
+  /**
+   * Required. The resource name of the conversation.
+   * Format: ai/conversations/{conversation}
+   *
+   * @generated from field: string name = 1;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message memos.api.v1.DeleteChatConversationRequest.
+ * Use `create(DeleteChatConversationRequestSchema)` to create a new message.
+ */
+export const DeleteChatConversationRequestSchema: GenMessage<DeleteChatConversationRequest> = /*@__PURE__*/
+  messageDesc(file_api_v1_ai_service, 10);
 
 /**
  * @generated from message memos.api.v1.SendChatMessageRequest
@@ -244,6 +444,24 @@ export type SendChatMessageRequest = Message<"memos.api.v1.SendChatMessageReques
    * @generated from field: string content = 1;
    */
   content: string;
+
+  /**
+   * Required. The resource name of the conversation the message belongs to.
+   * Format: ai/conversations/{conversation}
+   *
+   * @generated from field: string conversation = 2;
+   */
+  conversation: string;
+
+  /**
+   * Required. Client-generated request ID, unique within the conversation.
+   * Repeating it returns the existing user message and its active or
+   * completed attempt; repeating it after the attempt failed or was
+   * cancelled creates a new attempt on the same user message.
+   *
+   * @generated from field: string request_id = 3;
+   */
+  requestId: string;
 };
 
 /**
@@ -251,7 +469,7 @@ export type SendChatMessageRequest = Message<"memos.api.v1.SendChatMessageReques
  * Use `create(SendChatMessageRequestSchema)` to create a new message.
  */
 export const SendChatMessageRequestSchema: GenMessage<SendChatMessageRequest> = /*@__PURE__*/
-  messageDesc(file_api_v1_ai_service, 6);
+  messageDesc(file_api_v1_ai_service, 11);
 
 /**
  * @generated from message memos.api.v1.SendChatMessageResponse
@@ -265,7 +483,7 @@ export type SendChatMessageResponse = Message<"memos.api.v1.SendChatMessageRespo
   userMessage?: ChatMessage | undefined;
 
   /**
-   * The assistant's reply message.
+   * The assistant's reply attempt.
    *
    * @generated from field: memos.api.v1.ChatMessage assistant_message = 2;
    */
@@ -277,20 +495,7 @@ export type SendChatMessageResponse = Message<"memos.api.v1.SendChatMessageRespo
  * Use `create(SendChatMessageResponseSchema)` to create a new message.
  */
 export const SendChatMessageResponseSchema: GenMessage<SendChatMessageResponse> = /*@__PURE__*/
-  messageDesc(file_api_v1_ai_service, 7);
-
-/**
- * @generated from message memos.api.v1.GetChatConversationRequest
- */
-export type GetChatConversationRequest = Message<"memos.api.v1.GetChatConversationRequest"> & {
-};
-
-/**
- * Describes the message memos.api.v1.GetChatConversationRequest.
- * Use `create(GetChatConversationRequestSchema)` to create a new message.
- */
-export const GetChatConversationRequestSchema: GenMessage<GetChatConversationRequest> = /*@__PURE__*/
-  messageDesc(file_api_v1_ai_service, 8);
+  messageDesc(file_api_v1_ai_service, 12);
 
 /**
  * @generated from service memos.api.v1.AIService
@@ -307,18 +512,29 @@ export const AIService: GenService<{
     output: typeof TranscribeResponseSchema;
   },
   /**
-   * SendChatMessage sends a user message in the caller's AI chat conversation
-   * and returns the stored user message together with the assistant's reply.
+   * CreateChatConversation creates a new AI chat conversation owned by the caller.
    *
-   * @generated from rpc memos.api.v1.AIService.SendChatMessage
+   * @generated from rpc memos.api.v1.AIService.CreateChatConversation
    */
-  sendChatMessage: {
+  createChatConversation: {
     methodKind: "unary";
-    input: typeof SendChatMessageRequestSchema;
-    output: typeof SendChatMessageResponseSchema;
+    input: typeof CreateChatConversationRequestSchema;
+    output: typeof ChatConversationSchema;
   },
   /**
-   * GetChatConversation returns the caller's AI chat conversation.
+   * ListChatConversations lists the caller's AI chat conversations, most
+   * recently updated first. Messages are not populated.
+   *
+   * @generated from rpc memos.api.v1.AIService.ListChatConversations
+   */
+  listChatConversations: {
+    methodKind: "unary";
+    input: typeof ListChatConversationsRequestSchema;
+    output: typeof ListChatConversationsResponseSchema;
+  },
+  /**
+   * GetChatConversation returns one of the caller's AI chat conversations
+   * with its messages.
    *
    * @generated from rpc memos.api.v1.AIService.GetChatConversation
    */
@@ -326,6 +542,29 @@ export const AIService: GenService<{
     methodKind: "unary";
     input: typeof GetChatConversationRequestSchema;
     output: typeof ChatConversationSchema;
+  },
+  /**
+   * DeleteChatConversation deletes one of the caller's AI chat conversations.
+   * An attempt still generating is cancelled.
+   *
+   * @generated from rpc memos.api.v1.AIService.DeleteChatConversation
+   */
+  deleteChatConversation: {
+    methodKind: "unary";
+    input: typeof DeleteChatConversationRequestSchema;
+    output: typeof EmptySchema;
+  },
+  /**
+   * SendChatMessage sends a user message in one of the caller's AI chat
+   * conversations and returns the stored user message together with the
+   * assistant's reply attempt.
+   *
+   * @generated from rpc memos.api.v1.AIService.SendChatMessage
+   */
+  sendChatMessage: {
+    methodKind: "unary";
+    input: typeof SendChatMessageRequestSchema;
+    output: typeof SendChatMessageResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_api_v1_ai_service, 0);

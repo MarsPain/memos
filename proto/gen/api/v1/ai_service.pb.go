@@ -10,6 +10,7 @@ import (
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
@@ -73,6 +74,66 @@ func (x ChatMessage_Role) Number() protoreflect.EnumNumber {
 // Deprecated: Use ChatMessage_Role.Descriptor instead.
 func (ChatMessage_Role) EnumDescriptor() ([]byte, []int) {
 	return file_api_v1_ai_service_proto_rawDescGZIP(), []int{3, 0}
+}
+
+// Status is the lifecycle state of a chat message.
+type ChatMessage_Status int32
+
+const (
+	ChatMessage_STATUS_UNSPECIFIED ChatMessage_Status = 0
+	// The assistant is still generating the message.
+	ChatMessage_STREAMING ChatMessage_Status = 1
+	// The message is complete.
+	ChatMessage_COMPLETE ChatMessage_Status = 2
+	// Generation failed; the message carries no visible content.
+	ChatMessage_FAILED ChatMessage_Status = 3
+	// Generation was cancelled before completion.
+	ChatMessage_CANCELLED ChatMessage_Status = 4
+)
+
+// Enum value maps for ChatMessage_Status.
+var (
+	ChatMessage_Status_name = map[int32]string{
+		0: "STATUS_UNSPECIFIED",
+		1: "STREAMING",
+		2: "COMPLETE",
+		3: "FAILED",
+		4: "CANCELLED",
+	}
+	ChatMessage_Status_value = map[string]int32{
+		"STATUS_UNSPECIFIED": 0,
+		"STREAMING":          1,
+		"COMPLETE":           2,
+		"FAILED":             3,
+		"CANCELLED":          4,
+	}
+)
+
+func (x ChatMessage_Status) Enum() *ChatMessage_Status {
+	p := new(ChatMessage_Status)
+	*p = x
+	return p
+}
+
+func (x ChatMessage_Status) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ChatMessage_Status) Descriptor() protoreflect.EnumDescriptor {
+	return file_api_v1_ai_service_proto_enumTypes[1].Descriptor()
+}
+
+func (ChatMessage_Status) Type() protoreflect.EnumType {
+	return &file_api_v1_ai_service_proto_enumTypes[1]
+}
+
+func (x ChatMessage_Status) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ChatMessage_Status.Descriptor instead.
+func (ChatMessage_Status) EnumDescriptor() ([]byte, []int) {
+	return file_api_v1_ai_service_proto_rawDescGZIP(), []int{3, 1}
 }
 
 type TranscribeRequest struct {
@@ -272,14 +333,22 @@ type ChatMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The author of the message.
 	Role ChatMessage_Role `protobuf:"varint,1,opt,name=role,proto3,enum=memos.api.v1.ChatMessage_Role" json:"role,omitempty"`
-	// The text content of the message.
+	// The visible text content of the message. Hidden provider reasoning is
+	// neither requested nor stored.
 	Content string `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
 	// The time the message was created.
 	CreateTime *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=create_time,json=createTime,proto3" json:"create_time,omitempty"`
 	// Source citations backing the message. Only set on assistant messages.
-	Citations     []*ChatCitation `protobuf:"bytes,4,rep,name=citations,proto3" json:"citations,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Citations []*ChatCitation `protobuf:"bytes,4,rep,name=citations,proto3" json:"citations,omitempty"`
+	// The lifecycle status of the message.
+	Status ChatMessage_Status `protobuf:"varint,5,opt,name=status,proto3,enum=memos.api.v1.ChatMessage_Status" json:"status,omitempty"`
+	// The attempt number of an assistant message answering its user message;
+	// 0 for user messages.
+	Attempt int32 `protobuf:"varint,6,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	// The client request ID of a user message; empty for assistant messages.
+	ClientRequestId string `protobuf:"bytes,7,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ChatMessage) Reset() {
@@ -340,6 +409,27 @@ func (x *ChatMessage) GetCitations() []*ChatCitation {
 	return nil
 }
 
+func (x *ChatMessage) GetStatus() ChatMessage_Status {
+	if x != nil {
+		return x.Status
+	}
+	return ChatMessage_STATUS_UNSPECIFIED
+}
+
+func (x *ChatMessage) GetAttempt() int32 {
+	if x != nil {
+		return x.Attempt
+	}
+	return 0
+}
+
+func (x *ChatMessage) GetClientRequestId() string {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return ""
+}
+
 // ChatCitation references the memo a chat answer was grounded in.
 type ChatCitation struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -396,16 +486,27 @@ func (x *ChatCitation) GetSnippet() string {
 	return ""
 }
 
-// ChatConversation is the caller's single conversation thread with the AI assistant.
+// ChatConversation is a private AI chat conversation owned by a user.
 type ChatConversation struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The messages in the conversation, in chronological order.
+	// The messages in the conversation, in chronological order. Populated by
+	// GetChatConversation only.
 	Messages []*ChatMessage `protobuf:"bytes,1,rep,name=messages,proto3" json:"messages,omitempty"`
 	// Whether the instance has a generation model configured.
 	// When false, the assistant cannot generate new replies.
 	GenerationAvailable bool `protobuf:"varint,2,opt,name=generation_available,json=generationAvailable,proto3" json:"generation_available,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// The resource name of the conversation.
+	// Format: ai/conversations/{conversation}
+	Name string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	// The conversation title. Derived from the first user message when the
+	// conversation was created without one.
+	Title string `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
+	// The time the conversation was created.
+	CreateTime *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=create_time,json=createTime,proto3" json:"create_time,omitempty"`
+	// The last time the conversation or its messages changed.
+	UpdateTime    *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=update_time,json=updateTime,proto3" json:"update_time,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ChatConversation) Reset() {
@@ -452,17 +553,282 @@ func (x *ChatConversation) GetGenerationAvailable() bool {
 	return false
 }
 
+func (x *ChatConversation) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ChatConversation) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *ChatConversation) GetCreateTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreateTime
+	}
+	return nil
+}
+
+func (x *ChatConversation) GetUpdateTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdateTime
+	}
+	return nil
+}
+
+type CreateChatConversationRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Optional. The conversation title; derived from the first user message
+	// when empty.
+	Title         string `protobuf:"bytes,1,opt,name=title,proto3" json:"title,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateChatConversationRequest) Reset() {
+	*x = CreateChatConversationRequest{}
+	mi := &file_api_v1_ai_service_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateChatConversationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateChatConversationRequest) ProtoMessage() {}
+
+func (x *CreateChatConversationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_v1_ai_service_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateChatConversationRequest.ProtoReflect.Descriptor instead.
+func (*CreateChatConversationRequest) Descriptor() ([]byte, []int) {
+	return file_api_v1_ai_service_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *CreateChatConversationRequest) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+type ListChatConversationsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListChatConversationsRequest) Reset() {
+	*x = ListChatConversationsRequest{}
+	mi := &file_api_v1_ai_service_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListChatConversationsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListChatConversationsRequest) ProtoMessage() {}
+
+func (x *ListChatConversationsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_v1_ai_service_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListChatConversationsRequest.ProtoReflect.Descriptor instead.
+func (*ListChatConversationsRequest) Descriptor() ([]byte, []int) {
+	return file_api_v1_ai_service_proto_rawDescGZIP(), []int{7}
+}
+
+type ListChatConversationsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The caller's conversations, most recently updated first. Messages are
+	// not populated.
+	Conversations []*ChatConversation `protobuf:"bytes,1,rep,name=conversations,proto3" json:"conversations,omitempty"`
+	// Whether the instance has a generation model configured.
+	GenerationAvailable bool `protobuf:"varint,2,opt,name=generation_available,json=generationAvailable,proto3" json:"generation_available,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *ListChatConversationsResponse) Reset() {
+	*x = ListChatConversationsResponse{}
+	mi := &file_api_v1_ai_service_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListChatConversationsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListChatConversationsResponse) ProtoMessage() {}
+
+func (x *ListChatConversationsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_v1_ai_service_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListChatConversationsResponse.ProtoReflect.Descriptor instead.
+func (*ListChatConversationsResponse) Descriptor() ([]byte, []int) {
+	return file_api_v1_ai_service_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ListChatConversationsResponse) GetConversations() []*ChatConversation {
+	if x != nil {
+		return x.Conversations
+	}
+	return nil
+}
+
+func (x *ListChatConversationsResponse) GetGenerationAvailable() bool {
+	if x != nil {
+		return x.GenerationAvailable
+	}
+	return false
+}
+
+type GetChatConversationRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Required. The resource name of the conversation.
+	// Format: ai/conversations/{conversation}
+	Name          string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetChatConversationRequest) Reset() {
+	*x = GetChatConversationRequest{}
+	mi := &file_api_v1_ai_service_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetChatConversationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetChatConversationRequest) ProtoMessage() {}
+
+func (x *GetChatConversationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_v1_ai_service_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetChatConversationRequest.ProtoReflect.Descriptor instead.
+func (*GetChatConversationRequest) Descriptor() ([]byte, []int) {
+	return file_api_v1_ai_service_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *GetChatConversationRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type DeleteChatConversationRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Required. The resource name of the conversation.
+	// Format: ai/conversations/{conversation}
+	Name          string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteChatConversationRequest) Reset() {
+	*x = DeleteChatConversationRequest{}
+	mi := &file_api_v1_ai_service_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteChatConversationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteChatConversationRequest) ProtoMessage() {}
+
+func (x *DeleteChatConversationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_v1_ai_service_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteChatConversationRequest.ProtoReflect.Descriptor instead.
+func (*DeleteChatConversationRequest) Descriptor() ([]byte, []int) {
+	return file_api_v1_ai_service_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *DeleteChatConversationRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
 type SendChatMessageRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Required. The text content of the user's message.
-	Content       string `protobuf:"bytes,1,opt,name=content,proto3" json:"content,omitempty"`
+	Content string `protobuf:"bytes,1,opt,name=content,proto3" json:"content,omitempty"`
+	// Required. The resource name of the conversation the message belongs to.
+	// Format: ai/conversations/{conversation}
+	Conversation string `protobuf:"bytes,2,opt,name=conversation,proto3" json:"conversation,omitempty"`
+	// Required. Client-generated request ID, unique within the conversation.
+	// Repeating it returns the existing user message and its active or
+	// completed attempt; repeating it after the attempt failed or was
+	// cancelled creates a new attempt on the same user message.
+	RequestId     string `protobuf:"bytes,3,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SendChatMessageRequest) Reset() {
 	*x = SendChatMessageRequest{}
-	mi := &file_api_v1_ai_service_proto_msgTypes[6]
+	mi := &file_api_v1_ai_service_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -474,7 +840,7 @@ func (x *SendChatMessageRequest) String() string {
 func (*SendChatMessageRequest) ProtoMessage() {}
 
 func (x *SendChatMessageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_v1_ai_service_proto_msgTypes[6]
+	mi := &file_api_v1_ai_service_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -487,7 +853,7 @@ func (x *SendChatMessageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendChatMessageRequest.ProtoReflect.Descriptor instead.
 func (*SendChatMessageRequest) Descriptor() ([]byte, []int) {
-	return file_api_v1_ai_service_proto_rawDescGZIP(), []int{6}
+	return file_api_v1_ai_service_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *SendChatMessageRequest) GetContent() string {
@@ -497,11 +863,25 @@ func (x *SendChatMessageRequest) GetContent() string {
 	return ""
 }
 
+func (x *SendChatMessageRequest) GetConversation() string {
+	if x != nil {
+		return x.Conversation
+	}
+	return ""
+}
+
+func (x *SendChatMessageRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
 type SendChatMessageResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The stored user message.
 	UserMessage *ChatMessage `protobuf:"bytes,1,opt,name=user_message,json=userMessage,proto3" json:"user_message,omitempty"`
-	// The assistant's reply message.
+	// The assistant's reply attempt.
 	AssistantMessage *ChatMessage `protobuf:"bytes,2,opt,name=assistant_message,json=assistantMessage,proto3" json:"assistant_message,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
@@ -509,7 +889,7 @@ type SendChatMessageResponse struct {
 
 func (x *SendChatMessageResponse) Reset() {
 	*x = SendChatMessageResponse{}
-	mi := &file_api_v1_ai_service_proto_msgTypes[7]
+	mi := &file_api_v1_ai_service_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -521,7 +901,7 @@ func (x *SendChatMessageResponse) String() string {
 func (*SendChatMessageResponse) ProtoMessage() {}
 
 func (x *SendChatMessageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_v1_ai_service_proto_msgTypes[7]
+	mi := &file_api_v1_ai_service_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -534,7 +914,7 @@ func (x *SendChatMessageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendChatMessageResponse.ProtoReflect.Descriptor instead.
 func (*SendChatMessageResponse) Descriptor() ([]byte, []int) {
-	return file_api_v1_ai_service_proto_rawDescGZIP(), []int{7}
+	return file_api_v1_ai_service_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *SendChatMessageResponse) GetUserMessage() *ChatMessage {
@@ -551,47 +931,11 @@ func (x *SendChatMessageResponse) GetAssistantMessage() *ChatMessage {
 	return nil
 }
 
-type GetChatConversationRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetChatConversationRequest) Reset() {
-	*x = GetChatConversationRequest{}
-	mi := &file_api_v1_ai_service_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetChatConversationRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetChatConversationRequest) ProtoMessage() {}
-
-func (x *GetChatConversationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_v1_ai_service_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetChatConversationRequest.ProtoReflect.Descriptor instead.
-func (*GetChatConversationRequest) Descriptor() ([]byte, []int) {
-	return file_api_v1_ai_service_proto_rawDescGZIP(), []int{8}
-}
-
 var File_api_v1_ai_service_proto protoreflect.FileDescriptor
 
 const file_api_v1_ai_service_proto_rawDesc = "" +
 	"\n" +
-	"\x17api/v1/ai_service.proto\x12\fmemos.api.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x17google/api/client.proto\x1a\x1fgoogle/api/field_behavior.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"P\n" +
+	"\x17api/v1/ai_service.proto\x12\fmemos.api.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x17google/api/client.proto\x1a\x1fgoogle/api/field_behavior.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"P\n" +
 	"\x11TranscribeRequest\x12;\n" +
 	"\x05audio\x18\x01 \x01(\v2 .memos.api.v1.TranscriptionAudioB\x03\xe0A\x02R\x05audio\"\x9c\x01\n" +
 	"\x12TranscriptionAudio\x12\x1f\n" +
@@ -601,34 +945,65 @@ const file_api_v1_ai_service_proto_rawDesc = "" +
 	"\fcontent_type\x18\x04 \x01(\tB\x03\xe0A\x01R\vcontentTypeB\b\n" +
 	"\x06source\"(\n" +
 	"\x12TranscribeResponse\x12\x12\n" +
-	"\x04text\x18\x01 \x01(\tR\x04text\"\x89\x02\n" +
+	"\x04text\x18\x01 \x01(\tR\x04text\"\xe3\x03\n" +
 	"\vChatMessage\x122\n" +
 	"\x04role\x18\x01 \x01(\x0e2\x1e.memos.api.v1.ChatMessage.RoleR\x04role\x12\x18\n" +
 	"\acontent\x18\x02 \x01(\tR\acontent\x12;\n" +
 	"\vcreate_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"createTime\x128\n" +
-	"\tcitations\x18\x04 \x03(\v2\x1a.memos.api.v1.ChatCitationR\tcitations\"5\n" +
+	"\tcitations\x18\x04 \x03(\v2\x1a.memos.api.v1.ChatCitationR\tcitations\x128\n" +
+	"\x06status\x18\x05 \x01(\x0e2 .memos.api.v1.ChatMessage.StatusR\x06status\x12\x18\n" +
+	"\aattempt\x18\x06 \x01(\x05R\aattempt\x12*\n" +
+	"\x11client_request_id\x18\a \x01(\tR\x0fclientRequestId\"5\n" +
 	"\x04Role\x12\x14\n" +
 	"\x10ROLE_UNSPECIFIED\x10\x00\x12\b\n" +
 	"\x04USER\x10\x01\x12\r\n" +
-	"\tASSISTANT\x10\x02\"<\n" +
+	"\tASSISTANT\x10\x02\"X\n" +
+	"\x06Status\x12\x16\n" +
+	"\x12STATUS_UNSPECIFIED\x10\x00\x12\r\n" +
+	"\tSTREAMING\x10\x01\x12\f\n" +
+	"\bCOMPLETE\x10\x02\x12\n" +
+	"\n" +
+	"\x06FAILED\x10\x03\x12\r\n" +
+	"\tCANCELLED\x10\x04\"<\n" +
 	"\fChatCitation\x12\x12\n" +
 	"\x04memo\x18\x01 \x01(\tR\x04memo\x12\x18\n" +
-	"\asnippet\x18\x02 \x01(\tR\asnippet\"|\n" +
+	"\asnippet\x18\x02 \x01(\tR\asnippet\"\xa0\x02\n" +
 	"\x10ChatConversation\x125\n" +
 	"\bmessages\x18\x01 \x03(\v2\x19.memos.api.v1.ChatMessageR\bmessages\x121\n" +
-	"\x14generation_available\x18\x02 \x01(\bR\x13generationAvailable\"7\n" +
+	"\x14generation_available\x18\x02 \x01(\bR\x13generationAvailable\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x14\n" +
+	"\x05title\x18\x04 \x01(\tR\x05title\x12;\n" +
+	"\vcreate_time\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"createTime\x12;\n" +
+	"\vupdate_time\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"updateTime\":\n" +
+	"\x1dCreateChatConversationRequest\x12\x19\n" +
+	"\x05title\x18\x01 \x01(\tB\x03\xe0A\x01R\x05title\"\x1e\n" +
+	"\x1cListChatConversationsRequest\"\x98\x01\n" +
+	"\x1dListChatConversationsResponse\x12D\n" +
+	"\rconversations\x18\x01 \x03(\v2\x1e.memos.api.v1.ChatConversationR\rconversations\x121\n" +
+	"\x14generation_available\x18\x02 \x01(\bR\x13generationAvailable\"5\n" +
+	"\x1aGetChatConversationRequest\x12\x17\n" +
+	"\x04name\x18\x01 \x01(\tB\x03\xe0A\x02R\x04name\"8\n" +
+	"\x1dDeleteChatConversationRequest\x12\x17\n" +
+	"\x04name\x18\x01 \x01(\tB\x03\xe0A\x02R\x04name\"\x84\x01\n" +
 	"\x16SendChatMessageRequest\x12\x1d\n" +
-	"\acontent\x18\x01 \x01(\tB\x03\xe0A\x02R\acontent\"\x9f\x01\n" +
+	"\acontent\x18\x01 \x01(\tB\x03\xe0A\x02R\acontent\x12'\n" +
+	"\fconversation\x18\x02 \x01(\tB\x03\xe0A\x02R\fconversation\x12\"\n" +
+	"\n" +
+	"request_id\x18\x03 \x01(\tB\x03\xe0A\x02R\trequestId\"\x9f\x01\n" +
 	"\x17SendChatMessageResponse\x12<\n" +
 	"\fuser_message\x18\x01 \x01(\v2\x19.memos.api.v1.ChatMessageR\vuserMessage\x12F\n" +
-	"\x11assistant_message\x18\x02 \x01(\v2\x19.memos.api.v1.ChatMessageR\x10assistantMessage\"\x1c\n" +
-	"\x1aGetChatConversationRequest2\xa4\x03\n" +
+	"\x11assistant_message\x18\x02 \x01(\v2\x19.memos.api.v1.ChatMessageR\x10assistantMessage2\xa3\a\n" +
 	"\tAIService\x12y\n" +
 	"\n" +
-	"Transcribe\x12\x1f.memos.api.v1.TranscribeRequest\x1a .memos.api.v1.TranscribeResponse\"(\xdaA\x05audio\x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api/v1/ai:transcribe\x12\x90\x01\n" +
-	"\x0fSendChatMessage\x12$.memos.api.v1.SendChatMessageRequest\x1a%.memos.api.v1.SendChatMessageResponse\"0\xdaA\acontent\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/api/v1/ai/chat:sendMessage\x12\x88\x01\n" +
-	"\x13GetChatConversation\x12(.memos.api.v1.GetChatConversationRequest\x1a\x1e.memos.api.v1.ChatConversation\"'\xdaA\x00\x82\xd3\xe4\x93\x02\x1e\x12\x1c/api/v1/ai/chat/conversationB\xa6\x01\n" +
+	"Transcribe\x12\x1f.memos.api.v1.TranscribeRequest\x1a .memos.api.v1.TranscribeResponse\"(\xdaA\x05audio\x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api/v1/ai:transcribe\x12\x92\x01\n" +
+	"\x16CreateChatConversation\x12+.memos.api.v1.CreateChatConversationRequest\x1a\x1e.memos.api.v1.ChatConversation\"+\xdaA\x00\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/api/v1/ai/chat/conversations\x12\x9a\x01\n" +
+	"\x15ListChatConversations\x12*.memos.api.v1.ListChatConversationsRequest\x1a+.memos.api.v1.ListChatConversationsResponse\"(\xdaA\x00\x82\xd3\xe4\x93\x02\x1f\x12\x1d/api/v1/ai/chat/conversations\x12\x91\x01\n" +
+	"\x13GetChatConversation\x12(.memos.api.v1.GetChatConversationRequest\x1a\x1e.memos.api.v1.ChatConversation\"0\xdaA\x04name\x82\xd3\xe4\x93\x02#\x12!/api/v1/{name=ai/conversations/*}\x12\x8f\x01\n" +
+	"\x16DeleteChatConversation\x12+.memos.api.v1.DeleteChatConversationRequest\x1a\x16.google.protobuf.Empty\"0\xdaA\x04name\x82\xd3\xe4\x93\x02#*!/api/v1/{name=ai/conversations/*}\x12\xc2\x01\n" +
+	"\x0fSendChatMessage\x12$.memos.api.v1.SendChatMessageRequest\x1a%.memos.api.v1.SendChatMessageResponse\"b\xdaA\x1fconversation,content,request_id\x82\xd3\xe4\x93\x02::\x01*\"5/api/v1/{conversation=ai/conversations/*}:sendMessageB\xa6\x01\n" +
 	"\x10com.memos.api.v1B\x0eAiServiceProtoP\x01Z0github.com/usememos/memos/proto/gen/api/v1;apiv1\xa2\x02\x03MAX\xaa\x02\fMemos.Api.V1\xca\x02\fMemos\\Api\\V1\xe2\x02\x18Memos\\Api\\V1\\GPBMetadata\xea\x02\x0eMemos::Api::V1b\x06proto3"
 
 var (
@@ -643,40 +1018,56 @@ func file_api_v1_ai_service_proto_rawDescGZIP() []byte {
 	return file_api_v1_ai_service_proto_rawDescData
 }
 
-var file_api_v1_ai_service_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_api_v1_ai_service_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_api_v1_ai_service_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_api_v1_ai_service_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_api_v1_ai_service_proto_goTypes = []any{
-	(ChatMessage_Role)(0),              // 0: memos.api.v1.ChatMessage.Role
-	(*TranscribeRequest)(nil),          // 1: memos.api.v1.TranscribeRequest
-	(*TranscriptionAudio)(nil),         // 2: memos.api.v1.TranscriptionAudio
-	(*TranscribeResponse)(nil),         // 3: memos.api.v1.TranscribeResponse
-	(*ChatMessage)(nil),                // 4: memos.api.v1.ChatMessage
-	(*ChatCitation)(nil),               // 5: memos.api.v1.ChatCitation
-	(*ChatConversation)(nil),           // 6: memos.api.v1.ChatConversation
-	(*SendChatMessageRequest)(nil),     // 7: memos.api.v1.SendChatMessageRequest
-	(*SendChatMessageResponse)(nil),    // 8: memos.api.v1.SendChatMessageResponse
-	(*GetChatConversationRequest)(nil), // 9: memos.api.v1.GetChatConversationRequest
-	(*timestamppb.Timestamp)(nil),      // 10: google.protobuf.Timestamp
+	(ChatMessage_Role)(0),                 // 0: memos.api.v1.ChatMessage.Role
+	(ChatMessage_Status)(0),               // 1: memos.api.v1.ChatMessage.Status
+	(*TranscribeRequest)(nil),             // 2: memos.api.v1.TranscribeRequest
+	(*TranscriptionAudio)(nil),            // 3: memos.api.v1.TranscriptionAudio
+	(*TranscribeResponse)(nil),            // 4: memos.api.v1.TranscribeResponse
+	(*ChatMessage)(nil),                   // 5: memos.api.v1.ChatMessage
+	(*ChatCitation)(nil),                  // 6: memos.api.v1.ChatCitation
+	(*ChatConversation)(nil),              // 7: memos.api.v1.ChatConversation
+	(*CreateChatConversationRequest)(nil), // 8: memos.api.v1.CreateChatConversationRequest
+	(*ListChatConversationsRequest)(nil),  // 9: memos.api.v1.ListChatConversationsRequest
+	(*ListChatConversationsResponse)(nil), // 10: memos.api.v1.ListChatConversationsResponse
+	(*GetChatConversationRequest)(nil),    // 11: memos.api.v1.GetChatConversationRequest
+	(*DeleteChatConversationRequest)(nil), // 12: memos.api.v1.DeleteChatConversationRequest
+	(*SendChatMessageRequest)(nil),        // 13: memos.api.v1.SendChatMessageRequest
+	(*SendChatMessageResponse)(nil),       // 14: memos.api.v1.SendChatMessageResponse
+	(*timestamppb.Timestamp)(nil),         // 15: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),                 // 16: google.protobuf.Empty
 }
 var file_api_v1_ai_service_proto_depIdxs = []int32{
-	2,  // 0: memos.api.v1.TranscribeRequest.audio:type_name -> memos.api.v1.TranscriptionAudio
+	3,  // 0: memos.api.v1.TranscribeRequest.audio:type_name -> memos.api.v1.TranscriptionAudio
 	0,  // 1: memos.api.v1.ChatMessage.role:type_name -> memos.api.v1.ChatMessage.Role
-	10, // 2: memos.api.v1.ChatMessage.create_time:type_name -> google.protobuf.Timestamp
-	5,  // 3: memos.api.v1.ChatMessage.citations:type_name -> memos.api.v1.ChatCitation
-	4,  // 4: memos.api.v1.ChatConversation.messages:type_name -> memos.api.v1.ChatMessage
-	4,  // 5: memos.api.v1.SendChatMessageResponse.user_message:type_name -> memos.api.v1.ChatMessage
-	4,  // 6: memos.api.v1.SendChatMessageResponse.assistant_message:type_name -> memos.api.v1.ChatMessage
-	1,  // 7: memos.api.v1.AIService.Transcribe:input_type -> memos.api.v1.TranscribeRequest
-	7,  // 8: memos.api.v1.AIService.SendChatMessage:input_type -> memos.api.v1.SendChatMessageRequest
-	9,  // 9: memos.api.v1.AIService.GetChatConversation:input_type -> memos.api.v1.GetChatConversationRequest
-	3,  // 10: memos.api.v1.AIService.Transcribe:output_type -> memos.api.v1.TranscribeResponse
-	8,  // 11: memos.api.v1.AIService.SendChatMessage:output_type -> memos.api.v1.SendChatMessageResponse
-	6,  // 12: memos.api.v1.AIService.GetChatConversation:output_type -> memos.api.v1.ChatConversation
-	10, // [10:13] is the sub-list for method output_type
-	7,  // [7:10] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	15, // 2: memos.api.v1.ChatMessage.create_time:type_name -> google.protobuf.Timestamp
+	6,  // 3: memos.api.v1.ChatMessage.citations:type_name -> memos.api.v1.ChatCitation
+	1,  // 4: memos.api.v1.ChatMessage.status:type_name -> memos.api.v1.ChatMessage.Status
+	5,  // 5: memos.api.v1.ChatConversation.messages:type_name -> memos.api.v1.ChatMessage
+	15, // 6: memos.api.v1.ChatConversation.create_time:type_name -> google.protobuf.Timestamp
+	15, // 7: memos.api.v1.ChatConversation.update_time:type_name -> google.protobuf.Timestamp
+	7,  // 8: memos.api.v1.ListChatConversationsResponse.conversations:type_name -> memos.api.v1.ChatConversation
+	5,  // 9: memos.api.v1.SendChatMessageResponse.user_message:type_name -> memos.api.v1.ChatMessage
+	5,  // 10: memos.api.v1.SendChatMessageResponse.assistant_message:type_name -> memos.api.v1.ChatMessage
+	2,  // 11: memos.api.v1.AIService.Transcribe:input_type -> memos.api.v1.TranscribeRequest
+	8,  // 12: memos.api.v1.AIService.CreateChatConversation:input_type -> memos.api.v1.CreateChatConversationRequest
+	9,  // 13: memos.api.v1.AIService.ListChatConversations:input_type -> memos.api.v1.ListChatConversationsRequest
+	11, // 14: memos.api.v1.AIService.GetChatConversation:input_type -> memos.api.v1.GetChatConversationRequest
+	12, // 15: memos.api.v1.AIService.DeleteChatConversation:input_type -> memos.api.v1.DeleteChatConversationRequest
+	13, // 16: memos.api.v1.AIService.SendChatMessage:input_type -> memos.api.v1.SendChatMessageRequest
+	4,  // 17: memos.api.v1.AIService.Transcribe:output_type -> memos.api.v1.TranscribeResponse
+	7,  // 18: memos.api.v1.AIService.CreateChatConversation:output_type -> memos.api.v1.ChatConversation
+	10, // 19: memos.api.v1.AIService.ListChatConversations:output_type -> memos.api.v1.ListChatConversationsResponse
+	7,  // 20: memos.api.v1.AIService.GetChatConversation:output_type -> memos.api.v1.ChatConversation
+	16, // 21: memos.api.v1.AIService.DeleteChatConversation:output_type -> google.protobuf.Empty
+	14, // 22: memos.api.v1.AIService.SendChatMessage:output_type -> memos.api.v1.SendChatMessageResponse
+	17, // [17:23] is the sub-list for method output_type
+	11, // [11:17] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_api_v1_ai_service_proto_init() }
@@ -693,8 +1084,8 @@ func file_api_v1_ai_service_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_v1_ai_service_proto_rawDesc), len(file_api_v1_ai_service_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   9,
+			NumEnums:      2,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -123,3 +123,35 @@ CREATE TABLE user_identity (
 );
 
 CREATE INDEX idx_user_identity_user_id ON user_identity(user_id);
+
+-- ai_conversation
+CREATE TABLE ai_conversation (
+  id         SERIAL  PRIMARY KEY,
+  uid        TEXT    NOT NULL UNIQUE,
+  user_id    INTEGER NOT NULL,
+  title      TEXT    NOT NULL DEFAULT '',
+  created_ts BIGINT  NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()),
+  updated_ts BIGINT  NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW())
+);
+
+CREATE INDEX idx_ai_conversation_user_id ON ai_conversation(user_id);
+
+-- ai_message
+CREATE TABLE ai_message (
+  id                SERIAL  PRIMARY KEY,
+  conversation_id   INTEGER NOT NULL,
+  parent_id         INTEGER,
+  attempt           INTEGER NOT NULL DEFAULT 0,
+  role              TEXT    NOT NULL,
+  content           TEXT    NOT NULL DEFAULT '',
+  status            TEXT    NOT NULL,
+  client_request_id TEXT,
+  payload           JSONB   NOT NULL DEFAULT '{}',
+  created_ts        BIGINT  NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()),
+  updated_ts        BIGINT  NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()),
+  UNIQUE (conversation_id, client_request_id),
+  UNIQUE (parent_id, attempt),
+  FOREIGN KEY (conversation_id) REFERENCES ai_conversation(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_ai_message_conversation_id ON ai_message(conversation_id);

@@ -5,6 +5,7 @@ package memos.api.v1;
 import "google/api/annotations.proto";
 import "google/api/client.proto";
 import "google/api/field_behavior.proto";
+import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
 option go_package = "gen/api/v1";
@@ -18,19 +19,41 @@ service AIService {
     };
     option (google.api.method_signature) = "audio";
   }
-  // SendChatMessage sends a user message in the caller's AI chat conversation
-  // and returns the stored user message together with the assistant's reply.
-  rpc SendChatMessage(SendChatMessageRequest) returns (SendChatMessageResponse) {
+  // CreateChatConversation creates a new AI chat conversation owned by the caller.
+  rpc CreateChatConversation(CreateChatConversationRequest) returns (ChatConversation) {
     option (google.api.http) = {
-      post: "/api/v1/ai/chat:sendMessage"
+      post: "/api/v1/ai/chat/conversations"
       body: "*"
     };
-    option (google.api.method_signature) = "content";
-  }
-  // GetChatConversation returns the caller's AI chat conversation.
-  rpc GetChatConversation(GetChatConversationRequest) returns (ChatConversation) {
-    option (google.api.http) = {get: "/api/v1/ai/chat/conversation"};
     option (google.api.method_signature) = "";
+  }
+  // ListChatConversations lists the caller's AI chat conversations, most
+  // recently updated first. Messages are not populated.
+  rpc ListChatConversations(ListChatConversationsRequest) returns (ListChatConversationsResponse) {
+    option (google.api.http) = {get: "/api/v1/ai/chat/conversations"};
+    option (google.api.method_signature) = "";
+  }
+  // GetChatConversation returns one of the caller's AI chat conversations
+  // with its messages.
+  rpc GetChatConversation(GetChatConversationRequest) returns (ChatConversation) {
+    option (google.api.http) = {get: "/api/v1/{name=ai/conversations/*}"};
+    option (google.api.method_signature) = "name";
+  }
+  // DeleteChatConversation deletes one of the caller's AI chat conversations.
+  // An attempt still generating is cancelled.
+  rpc DeleteChatConversation(DeleteChatConversationRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/api/v1/{name=ai/conversations/*}"};
+    option (google.api.method_signature) = "name";
+  }
+  // SendChatMessage sends a user message in one of the caller's AI chat
+  // conversations and returns the stored user message together with the
+  // assistant's reply attempt.
+  rpc SendChatMessage(SendChatMessageRequest) returns (SendChatMessageResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/{conversation=ai/conversations/*}:sendMessage"
+      body: "*"
+    };
+    option (google.api.method_signature) = "conversation,content,request_id";
   }
 }
 
@@ -71,10 +94,24 @@ message ChatMessage {
     ASSISTANT = 2;
   }
 
+  // Status is the lifecycle state of a chat message.
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    // The assistant is still generating the message.
+    STREAMING = 1;
+    // The message is complete.
+    COMPLETE = 2;
+    // Generation failed; the message carries no visible content.
+    FAILED = 3;
+    // Generation was cancelled before completion.
+    CANCELLED = 4;
+  }
+
   // The author of the message.
   Role role = 1;
 
-  // The text content of the message.
+  // The visible text content of the message. Hidden provider reasoning is
+  // neither requested nor stored.
   string content = 2;
 
   // The time the message was created.
@@ -82,6 +119,16 @@ message ChatMessage {
 
   // Source citations backing the message. Only set on assistant messages.
   repeated ChatCitation citations = 4;
+
+  // The lifecycle status of the message.
+  Status status = 5;
+
+  // The attempt number of an assistant message answering its user message;
+  // 0 for user messages.
+  int32 attempt = 6;
+
+  // The client request ID of a user message; empty for assistant messages.
+  string client_request_id = 7;
 }
 
 // ChatCitation references the memo a chat answer was grounded in.
@@ -94,27 +141,79 @@ message ChatCitation {
   string snippet = 2;
 }
 
-// ChatConversation is the caller's single conversation thread with the AI assistant.
+// ChatConversation is a private AI chat conversation owned by a user.
 message ChatConversation {
-  // The messages in the conversation, in chronological order.
+  // The messages in the conversation, in chronological order. Populated by
+  // GetChatConversation only.
   repeated ChatMessage messages = 1;
 
   // Whether the instance has a generation model configured.
   // When false, the assistant cannot generate new replies.
   bool generation_available = 2;
+
+  // The resource name of the conversation.
+  // Format: ai/conversations/{conversation}
+  string name = 3;
+
+  // The conversation title. Derived from the first user message when the
+  // conversation was created without one.
+  string title = 4;
+
+  // The time the conversation was created.
+  google.protobuf.Timestamp create_time = 5;
+
+  // The last time the conversation or its messages changed.
+  google.protobuf.Timestamp update_time = 6;
+}
+
+message CreateChatConversationRequest {
+  // Optional. The conversation title; derived from the first user message
+  // when empty.
+  string title = 1 [(google.api.field_behavior) = OPTIONAL];
+}
+
+message ListChatConversationsRequest {}
+
+message ListChatConversationsResponse {
+  // The caller's conversations, most recently updated first. Messages are
+  // not populated.
+  repeated ChatConversation conversations = 1;
+
+  // Whether the instance has a generation model configured.
+  bool generation_available = 2;
+}
+
+message GetChatConversationRequest {
+  // Required. The resource name of the conversation.
+  // Format: ai/conversations/{conversation}
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+message DeleteChatConversationRequest {
+  // Required. The resource name of the conversation.
+  // Format: ai/conversations/{conversation}
+  string name = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
 message SendChatMessageRequest {
   // Required. The text content of the user's message.
   string content = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // Required. The resource name of the conversation the message belongs to.
+  // Format: ai/conversations/{conversation}
+  string conversation = 2 [(google.api.field_behavior) = REQUIRED];
+
+  // Required. Client-generated request ID, unique within the conversation.
+  // Repeating it returns the existing user message and its active or
+  // completed attempt; repeating it after the attempt failed or was
+  // cancelled creates a new attempt on the same user message.
+  string request_id = 3 [(google.api.field_behavior) = REQUIRED];
 }
 
 message SendChatMessageResponse {
   // The stored user message.
   ChatMessage user_message = 1;
 
-  // The assistant's reply message.
+  // The assistant's reply attempt.
   ChatMessage assistant_message = 2;
 }
-
-message GetChatConversationRequest {}

@@ -123,3 +123,35 @@ CREATE TABLE `user_identity` (
 );
 
 CREATE INDEX `idx_user_identity_user_id` ON `user_identity`(`user_id`);
+
+-- ai_conversation
+CREATE TABLE `ai_conversation` (
+  `id`         INT          NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `uid`        VARCHAR(255) NOT NULL UNIQUE,
+  `user_id`    INT          NOT NULL,
+  `title`      TEXT         NOT NULL,
+  `created_ts` BIGINT       NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  `updated_ts` BIGINT       NOT NULL DEFAULT (UNIX_TIMESTAMP())
+);
+
+CREATE INDEX `idx_ai_conversation_user_id` ON `ai_conversation`(`user_id`);
+
+-- ai_message
+CREATE TABLE `ai_message` (
+  `id`                INT         NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `conversation_id`   INT         NOT NULL,
+  `parent_id`         INT,
+  `attempt`           INT         NOT NULL DEFAULT 0,
+  `role`              VARCHAR(32) NOT NULL,
+  `content`           TEXT        NOT NULL,
+  `status`            VARCHAR(32) NOT NULL,
+  `client_request_id` VARCHAR(255),
+  `payload`           JSON        NOT NULL,
+  `created_ts`        BIGINT      NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  `updated_ts`        BIGINT      NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  UNIQUE (`conversation_id`, `client_request_id`),
+  UNIQUE (`parent_id`, `attempt`),
+  FOREIGN KEY (`conversation_id`) REFERENCES `ai_conversation`(`id`) ON DELETE CASCADE
+);
+
+CREATE INDEX `idx_ai_message_conversation_id` ON `ai_message`(`conversation_id`);
