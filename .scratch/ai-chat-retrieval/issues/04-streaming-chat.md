@@ -2,7 +2,7 @@
 
 Parent spec: [AI Chat And Retrieval](../../../docs/product-specs/ai-chat-retrieval.md)
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 01, 03
 
 ## Outcome
@@ -39,3 +39,24 @@ cd web && pnpm lint && pnpm test
 ```
 
 Chat tests cover streaming, disconnect/reconnect reconciliation, cancellation, and failure categories with deterministic fakes.
+
+## Comments
+
+Implemented: SendChatMessage converted to a Connect server-streaming RPC (start/delta/complete events;
+regenerated Go, TypeScript, and OpenAPI outputs; SSE hub untouched). Send flow persists the user
+message + STREAMING attempt atomically, streams provider deltas, and persists COMPLETE/FAILED/
+CANCELLED with normalized provider error categories on the attempt payload. Client disconnect and
+conversation deletion propagate cancellation to the provider and persist CANCELLED; attempt deadline
+persists FAILED/timeout; reconnecting clients reconcile via the stored conversation (2s polling while
+STREAMING). Centralized limits in server/ai/limits.go: per-user send rate, global concurrency,
+per-attempt timeout, and answer-size cap (response_too_large category). Delete-vs-send race from
+issue 03 hardened with a deletion tombstone in the active-attempt registry (lifted again if the store
+delete fails). Connect streaming handlers now authenticate via a real WrapStreamingHandler
+(previously a pass-through). Frontend renders deltas incrementally into the active attempt bubble,
+reconciles with the complete event plus invalidation, aborts on navigation, and retries
+failed/cancelled attempts with the same request ID.
+Notable decision: the google.api.http annotation was dropped from SendChatMessage because the
+in-process gRPC-Gateway transport cannot serve streaming methods (it would have served Unimplemented
+while OpenAPI advertised the route). Chat send is served over the Connect endpoint (which also
+accepts native gRPC and gRPC-Web clients); unary chat RPCs keep their gateway routes.
+golangci-lint was not installed locally; `go vet` is clean.
