@@ -20,7 +20,10 @@ const (
 	ErrorTimeout        ErrorCategory = "timeout"
 	ErrorUnavailable    ErrorCategory = "unavailable"
 	ErrorMalformed      ErrorCategory = "malformed_response"
-	ErrorInternal       ErrorCategory = "internal"
+	// ErrorResponseTooLarge marks a provider response that exceeded the
+	// enforced size limit.
+	ErrorResponseTooLarge ErrorCategory = "response_too_large"
+	ErrorInternal         ErrorCategory = "internal"
 )
 
 // ProviderError omits provider payloads and request content from its public message.

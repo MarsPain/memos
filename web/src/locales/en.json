@@ -85,6 +85,8 @@
     "load-failed": "Failed to load conversation",
     "new-chat": "New chat",
     "no-conversations": "No conversations yet. Start a new chat to ask questions about your memos.",
+    "rate-limited": "Sending too many messages. Wait a moment and try again.",
+    "retry": "Retry",
     "send": "Send",
     "send-failed": "Failed to send message",
     "title": "Chat",

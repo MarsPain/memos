@@ -877,30 +877,35 @@ func (x *SendChatMessageRequest) GetRequestId() string {
 	return ""
 }
 
-type SendChatMessageResponse struct {
+// SendChatMessageEvent is one event of a SendChatMessage stream.
+type SendChatMessageEvent struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The stored user message.
-	UserMessage *ChatMessage `protobuf:"bytes,1,opt,name=user_message,json=userMessage,proto3" json:"user_message,omitempty"`
-	// The assistant's reply attempt.
-	AssistantMessage *ChatMessage `protobuf:"bytes,2,opt,name=assistant_message,json=assistantMessage,proto3" json:"assistant_message,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// The event payload.
+	//
+	// Types that are valid to be assigned to Event:
+	//
+	//	*SendChatMessageEvent_Start
+	//	*SendChatMessageEvent_Delta
+	//	*SendChatMessageEvent_Complete
+	Event         isSendChatMessageEvent_Event `protobuf_oneof:"event"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
-func (x *SendChatMessageResponse) Reset() {
-	*x = SendChatMessageResponse{}
+func (x *SendChatMessageEvent) Reset() {
+	*x = SendChatMessageEvent{}
 	mi := &file_api_v1_ai_service_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *SendChatMessageResponse) String() string {
+func (x *SendChatMessageEvent) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*SendChatMessageResponse) ProtoMessage() {}
+func (*SendChatMessageEvent) ProtoMessage() {}
 
-func (x *SendChatMessageResponse) ProtoReflect() protoreflect.Message {
+func (x *SendChatMessageEvent) ProtoReflect() protoreflect.Message {
 	mi := &file_api_v1_ai_service_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -912,19 +917,123 @@ func (x *SendChatMessageResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use SendChatMessageResponse.ProtoReflect.Descriptor instead.
-func (*SendChatMessageResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use SendChatMessageEvent.ProtoReflect.Descriptor instead.
+func (*SendChatMessageEvent) Descriptor() ([]byte, []int) {
 	return file_api_v1_ai_service_proto_rawDescGZIP(), []int{12}
 }
 
-func (x *SendChatMessageResponse) GetUserMessage() *ChatMessage {
+func (x *SendChatMessageEvent) GetEvent() isSendChatMessageEvent_Event {
+	if x != nil {
+		return x.Event
+	}
+	return nil
+}
+
+func (x *SendChatMessageEvent) GetStart() *SendChatMessageStart {
+	if x != nil {
+		if x, ok := x.Event.(*SendChatMessageEvent_Start); ok {
+			return x.Start
+		}
+	}
+	return nil
+}
+
+func (x *SendChatMessageEvent) GetDelta() string {
+	if x != nil {
+		if x, ok := x.Event.(*SendChatMessageEvent_Delta); ok {
+			return x.Delta
+		}
+	}
+	return ""
+}
+
+func (x *SendChatMessageEvent) GetComplete() *ChatMessage {
+	if x != nil {
+		if x, ok := x.Event.(*SendChatMessageEvent_Complete); ok {
+			return x.Complete
+		}
+	}
+	return nil
+}
+
+type isSendChatMessageEvent_Event interface {
+	isSendChatMessageEvent_Event()
+}
+
+type SendChatMessageEvent_Start struct {
+	// The first event: the stored user message and the assistant attempt
+	// being answered. A repeated request ID whose attempt is still active
+	// returns only this event; the stored state stays authoritative.
+	Start *SendChatMessageStart `protobuf:"bytes,1,opt,name=start,proto3,oneof"`
+}
+
+type SendChatMessageEvent_Delta struct {
+	// An incremental assistant answer delta. Deltas concatenate into the
+	// answer but are not authoritative; the complete event is.
+	Delta string `protobuf:"bytes,2,opt,name=delta,proto3,oneof"`
+}
+
+type SendChatMessageEvent_Complete struct {
+	// The terminal event: the authoritative stored assistant attempt,
+	// whether it completed, failed, or was cancelled.
+	Complete *ChatMessage `protobuf:"bytes,3,opt,name=complete,proto3,oneof"`
+}
+
+func (*SendChatMessageEvent_Start) isSendChatMessageEvent_Event() {}
+
+func (*SendChatMessageEvent_Delta) isSendChatMessageEvent_Event() {}
+
+func (*SendChatMessageEvent_Complete) isSendChatMessageEvent_Event() {}
+
+// SendChatMessageStart carries the persisted pair an answer streams for.
+type SendChatMessageStart struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The stored user message.
+	UserMessage *ChatMessage `protobuf:"bytes,1,opt,name=user_message,json=userMessage,proto3" json:"user_message,omitempty"`
+	// The assistant attempt answering it, still generating.
+	AssistantMessage *ChatMessage `protobuf:"bytes,2,opt,name=assistant_message,json=assistantMessage,proto3" json:"assistant_message,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *SendChatMessageStart) Reset() {
+	*x = SendChatMessageStart{}
+	mi := &file_api_v1_ai_service_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendChatMessageStart) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendChatMessageStart) ProtoMessage() {}
+
+func (x *SendChatMessageStart) ProtoReflect() protoreflect.Message {
+	mi := &file_api_v1_ai_service_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendChatMessageStart.ProtoReflect.Descriptor instead.
+func (*SendChatMessageStart) Descriptor() ([]byte, []int) {
+	return file_api_v1_ai_service_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *SendChatMessageStart) GetUserMessage() *ChatMessage {
 	if x != nil {
 		return x.UserMessage
 	}
 	return nil
 }
 
-func (x *SendChatMessageResponse) GetAssistantMessage() *ChatMessage {
+func (x *SendChatMessageStart) GetAssistantMessage() *ChatMessage {
 	if x != nil {
 		return x.AssistantMessage
 	}
@@ -992,18 +1101,23 @@ const file_api_v1_ai_service_proto_rawDesc = "" +
 	"\acontent\x18\x01 \x01(\tB\x03\xe0A\x02R\acontent\x12'\n" +
 	"\fconversation\x18\x02 \x01(\tB\x03\xe0A\x02R\fconversation\x12\"\n" +
 	"\n" +
-	"request_id\x18\x03 \x01(\tB\x03\xe0A\x02R\trequestId\"\x9f\x01\n" +
-	"\x17SendChatMessageResponse\x12<\n" +
+	"request_id\x18\x03 \x01(\tB\x03\xe0A\x02R\trequestId\"\xac\x01\n" +
+	"\x14SendChatMessageEvent\x12:\n" +
+	"\x05start\x18\x01 \x01(\v2\".memos.api.v1.SendChatMessageStartH\x00R\x05start\x12\x16\n" +
+	"\x05delta\x18\x02 \x01(\tH\x00R\x05delta\x127\n" +
+	"\bcomplete\x18\x03 \x01(\v2\x19.memos.api.v1.ChatMessageH\x00R\bcompleteB\a\n" +
+	"\x05event\"\x9c\x01\n" +
+	"\x14SendChatMessageStart\x12<\n" +
 	"\fuser_message\x18\x01 \x01(\v2\x19.memos.api.v1.ChatMessageR\vuserMessage\x12F\n" +
-	"\x11assistant_message\x18\x02 \x01(\v2\x19.memos.api.v1.ChatMessageR\x10assistantMessage2\xa3\a\n" +
+	"\x11assistant_message\x18\x02 \x01(\v2\x19.memos.api.v1.ChatMessageR\x10assistantMessage2\xe2\x06\n" +
 	"\tAIService\x12y\n" +
 	"\n" +
 	"Transcribe\x12\x1f.memos.api.v1.TranscribeRequest\x1a .memos.api.v1.TranscribeResponse\"(\xdaA\x05audio\x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api/v1/ai:transcribe\x12\x92\x01\n" +
 	"\x16CreateChatConversation\x12+.memos.api.v1.CreateChatConversationRequest\x1a\x1e.memos.api.v1.ChatConversation\"+\xdaA\x00\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/api/v1/ai/chat/conversations\x12\x9a\x01\n" +
 	"\x15ListChatConversations\x12*.memos.api.v1.ListChatConversationsRequest\x1a+.memos.api.v1.ListChatConversationsResponse\"(\xdaA\x00\x82\xd3\xe4\x93\x02\x1f\x12\x1d/api/v1/ai/chat/conversations\x12\x91\x01\n" +
 	"\x13GetChatConversation\x12(.memos.api.v1.GetChatConversationRequest\x1a\x1e.memos.api.v1.ChatConversation\"0\xdaA\x04name\x82\xd3\xe4\x93\x02#\x12!/api/v1/{name=ai/conversations/*}\x12\x8f\x01\n" +
-	"\x16DeleteChatConversation\x12+.memos.api.v1.DeleteChatConversationRequest\x1a\x16.google.protobuf.Empty\"0\xdaA\x04name\x82\xd3\xe4\x93\x02#*!/api/v1/{name=ai/conversations/*}\x12\xc2\x01\n" +
-	"\x0fSendChatMessage\x12$.memos.api.v1.SendChatMessageRequest\x1a%.memos.api.v1.SendChatMessageResponse\"b\xdaA\x1fconversation,content,request_id\x82\xd3\xe4\x93\x02::\x01*\"5/api/v1/{conversation=ai/conversations/*}:sendMessageB\xa6\x01\n" +
+	"\x16DeleteChatConversation\x12+.memos.api.v1.DeleteChatConversationRequest\x1a\x16.google.protobuf.Empty\"0\xdaA\x04name\x82\xd3\xe4\x93\x02#*!/api/v1/{name=ai/conversations/*}\x12\x81\x01\n" +
+	"\x0fSendChatMessage\x12$.memos.api.v1.SendChatMessageRequest\x1a\".memos.api.v1.SendChatMessageEvent\"\"\xdaA\x1fconversation,content,request_id0\x01B\xa6\x01\n" +
 	"\x10com.memos.api.v1B\x0eAiServiceProtoP\x01Z0github.com/usememos/memos/proto/gen/api/v1;apiv1\xa2\x02\x03MAX\xaa\x02\fMemos.Api.V1\xca\x02\fMemos\\Api\\V1\xe2\x02\x18Memos\\Api\\V1\\GPBMetadata\xea\x02\x0eMemos::Api::V1b\x06proto3"
 
 var (
@@ -1019,7 +1133,7 @@ func file_api_v1_ai_service_proto_rawDescGZIP() []byte {
 }
 
 var file_api_v1_ai_service_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_api_v1_ai_service_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_api_v1_ai_service_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_api_v1_ai_service_proto_goTypes = []any{
 	(ChatMessage_Role)(0),                 // 0: memos.api.v1.ChatMessage.Role
 	(ChatMessage_Status)(0),               // 1: memos.api.v1.ChatMessage.Status
@@ -1035,39 +1149,42 @@ var file_api_v1_ai_service_proto_goTypes = []any{
 	(*GetChatConversationRequest)(nil),    // 11: memos.api.v1.GetChatConversationRequest
 	(*DeleteChatConversationRequest)(nil), // 12: memos.api.v1.DeleteChatConversationRequest
 	(*SendChatMessageRequest)(nil),        // 13: memos.api.v1.SendChatMessageRequest
-	(*SendChatMessageResponse)(nil),       // 14: memos.api.v1.SendChatMessageResponse
-	(*timestamppb.Timestamp)(nil),         // 15: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),                 // 16: google.protobuf.Empty
+	(*SendChatMessageEvent)(nil),          // 14: memos.api.v1.SendChatMessageEvent
+	(*SendChatMessageStart)(nil),          // 15: memos.api.v1.SendChatMessageStart
+	(*timestamppb.Timestamp)(nil),         // 16: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),                 // 17: google.protobuf.Empty
 }
 var file_api_v1_ai_service_proto_depIdxs = []int32{
 	3,  // 0: memos.api.v1.TranscribeRequest.audio:type_name -> memos.api.v1.TranscriptionAudio
 	0,  // 1: memos.api.v1.ChatMessage.role:type_name -> memos.api.v1.ChatMessage.Role
-	15, // 2: memos.api.v1.ChatMessage.create_time:type_name -> google.protobuf.Timestamp
+	16, // 2: memos.api.v1.ChatMessage.create_time:type_name -> google.protobuf.Timestamp
 	6,  // 3: memos.api.v1.ChatMessage.citations:type_name -> memos.api.v1.ChatCitation
 	1,  // 4: memos.api.v1.ChatMessage.status:type_name -> memos.api.v1.ChatMessage.Status
 	5,  // 5: memos.api.v1.ChatConversation.messages:type_name -> memos.api.v1.ChatMessage
-	15, // 6: memos.api.v1.ChatConversation.create_time:type_name -> google.protobuf.Timestamp
-	15, // 7: memos.api.v1.ChatConversation.update_time:type_name -> google.protobuf.Timestamp
+	16, // 6: memos.api.v1.ChatConversation.create_time:type_name -> google.protobuf.Timestamp
+	16, // 7: memos.api.v1.ChatConversation.update_time:type_name -> google.protobuf.Timestamp
 	7,  // 8: memos.api.v1.ListChatConversationsResponse.conversations:type_name -> memos.api.v1.ChatConversation
-	5,  // 9: memos.api.v1.SendChatMessageResponse.user_message:type_name -> memos.api.v1.ChatMessage
-	5,  // 10: memos.api.v1.SendChatMessageResponse.assistant_message:type_name -> memos.api.v1.ChatMessage
-	2,  // 11: memos.api.v1.AIService.Transcribe:input_type -> memos.api.v1.TranscribeRequest
-	8,  // 12: memos.api.v1.AIService.CreateChatConversation:input_type -> memos.api.v1.CreateChatConversationRequest
-	9,  // 13: memos.api.v1.AIService.ListChatConversations:input_type -> memos.api.v1.ListChatConversationsRequest
-	11, // 14: memos.api.v1.AIService.GetChatConversation:input_type -> memos.api.v1.GetChatConversationRequest
-	12, // 15: memos.api.v1.AIService.DeleteChatConversation:input_type -> memos.api.v1.DeleteChatConversationRequest
-	13, // 16: memos.api.v1.AIService.SendChatMessage:input_type -> memos.api.v1.SendChatMessageRequest
-	4,  // 17: memos.api.v1.AIService.Transcribe:output_type -> memos.api.v1.TranscribeResponse
-	7,  // 18: memos.api.v1.AIService.CreateChatConversation:output_type -> memos.api.v1.ChatConversation
-	10, // 19: memos.api.v1.AIService.ListChatConversations:output_type -> memos.api.v1.ListChatConversationsResponse
-	7,  // 20: memos.api.v1.AIService.GetChatConversation:output_type -> memos.api.v1.ChatConversation
-	16, // 21: memos.api.v1.AIService.DeleteChatConversation:output_type -> google.protobuf.Empty
-	14, // 22: memos.api.v1.AIService.SendChatMessage:output_type -> memos.api.v1.SendChatMessageResponse
-	17, // [17:23] is the sub-list for method output_type
-	11, // [11:17] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	15, // 9: memos.api.v1.SendChatMessageEvent.start:type_name -> memos.api.v1.SendChatMessageStart
+	5,  // 10: memos.api.v1.SendChatMessageEvent.complete:type_name -> memos.api.v1.ChatMessage
+	5,  // 11: memos.api.v1.SendChatMessageStart.user_message:type_name -> memos.api.v1.ChatMessage
+	5,  // 12: memos.api.v1.SendChatMessageStart.assistant_message:type_name -> memos.api.v1.ChatMessage
+	2,  // 13: memos.api.v1.AIService.Transcribe:input_type -> memos.api.v1.TranscribeRequest
+	8,  // 14: memos.api.v1.AIService.CreateChatConversation:input_type -> memos.api.v1.CreateChatConversationRequest
+	9,  // 15: memos.api.v1.AIService.ListChatConversations:input_type -> memos.api.v1.ListChatConversationsRequest
+	11, // 16: memos.api.v1.AIService.GetChatConversation:input_type -> memos.api.v1.GetChatConversationRequest
+	12, // 17: memos.api.v1.AIService.DeleteChatConversation:input_type -> memos.api.v1.DeleteChatConversationRequest
+	13, // 18: memos.api.v1.AIService.SendChatMessage:input_type -> memos.api.v1.SendChatMessageRequest
+	4,  // 19: memos.api.v1.AIService.Transcribe:output_type -> memos.api.v1.TranscribeResponse
+	7,  // 20: memos.api.v1.AIService.CreateChatConversation:output_type -> memos.api.v1.ChatConversation
+	10, // 21: memos.api.v1.AIService.ListChatConversations:output_type -> memos.api.v1.ListChatConversationsResponse
+	7,  // 22: memos.api.v1.AIService.GetChatConversation:output_type -> memos.api.v1.ChatConversation
+	17, // 23: memos.api.v1.AIService.DeleteChatConversation:output_type -> google.protobuf.Empty
+	14, // 24: memos.api.v1.AIService.SendChatMessage:output_type -> memos.api.v1.SendChatMessageEvent
+	19, // [19:25] is the sub-list for method output_type
+	13, // [13:19] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_api_v1_ai_service_proto_init() }
@@ -1079,13 +1196,18 @@ func file_api_v1_ai_service_proto_init() {
 		(*TranscriptionAudio_Content)(nil),
 		(*TranscriptionAudio_Uri)(nil),
 	}
+	file_api_v1_ai_service_proto_msgTypes[12].OneofWrappers = []any{
+		(*SendChatMessageEvent_Start)(nil),
+		(*SendChatMessageEvent_Delta)(nil),
+		(*SendChatMessageEvent_Complete)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_v1_ai_service_proto_rawDesc), len(file_api_v1_ai_service_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   13,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

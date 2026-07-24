@@ -15,7 +15,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file api/v1/ai_service.proto.
  */
 export const file_api_v1_ai_service: GenFile = /*@__PURE__*/
-  fileDesc("ChdhcGkvdjEvYWlfc2VydmljZS5wcm90bxIMbWVtb3MuYXBpLnYxIkkKEVRyYW5zY3JpYmVSZXF1ZXN0EjQKBWF1ZGlvGAEgASgLMiAubWVtb3MuYXBpLnYxLlRyYW5zY3JpcHRpb25BdWRpb0ID4EECIncKElRyYW5zY3JpcHRpb25BdWRpbxIWCgdjb250ZW50GAEgASgMQgPgQQRIABINCgN1cmkYAiABKAlIABIVCghmaWxlbmFtZRgDIAEoCUID4EEBEhkKDGNvbnRlbnRfdHlwZRgEIAEoCUID4EEBQggKBnNvdXJjZSIiChJUcmFuc2NyaWJlUmVzcG9uc2USDAoEdGV4dBgBIAEoCSKbAwoLQ2hhdE1lc3NhZ2USLAoEcm9sZRgBIAEoDjIeLm1lbW9zLmFwaS52MS5DaGF0TWVzc2FnZS5Sb2xlEg8KB2NvbnRlbnQYAiABKAkSLwoLY3JlYXRlX3RpbWUYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi0KCWNpdGF0aW9ucxgEIAMoCzIaLm1lbW9zLmFwaS52MS5DaGF0Q2l0YXRpb24SMAoGc3RhdHVzGAUgASgOMiAubWVtb3MuYXBpLnYxLkNoYXRNZXNzYWdlLlN0YXR1cxIPCgdhdHRlbXB0GAYgASgFEhkKEWNsaWVudF9yZXF1ZXN0X2lkGAcgASgJIjUKBFJvbGUSFAoQUk9MRV9VTlNQRUNJRklFRBAAEggKBFVTRVIQARINCglBU1NJU1RBTlQQAiJYCgZTdGF0dXMSFgoSU1RBVFVTX1VOU1BFQ0lGSUVEEAASDQoJU1RSRUFNSU5HEAESDAoIQ09NUExFVEUQAhIKCgZGQUlMRUQQAxINCglDQU5DRUxMRUQQBCItCgxDaGF0Q2l0YXRpb24SDAoEbWVtbxgBIAEoCRIPCgdzbmlwcGV0GAIgASgJItwBChBDaGF0Q29udmVyc2F0aW9uEisKCG1lc3NhZ2VzGAEgAygLMhkubWVtb3MuYXBpLnYxLkNoYXRNZXNzYWdlEhwKFGdlbmVyYXRpb25fYXZhaWxhYmxlGAIgASgIEgwKBG5hbWUYAyABKAkSDQoFdGl0bGUYBCABKAkSLwoLY3JlYXRlX3RpbWUYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi8KC3VwZGF0ZV90aW1lGAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIzCh1DcmVhdGVDaGF0Q29udmVyc2F0aW9uUmVxdWVzdBISCgV0aXRsZRgBIAEoCUID4EEBIh4KHExpc3RDaGF0Q29udmVyc2F0aW9uc1JlcXVlc3QidAodTGlzdENoYXRDb252ZXJzYXRpb25zUmVzcG9uc2USNQoNY29udmVyc2F0aW9ucxgBIAMoCzIeLm1lbW9zLmFwaS52MS5DaGF0Q29udmVyc2F0aW9uEhwKFGdlbmVyYXRpb25fYXZhaWxhYmxlGAIgASgIIi8KGkdldENoYXRDb252ZXJzYXRpb25SZXF1ZXN0EhEKBG5hbWUYASABKAlCA+BBAiIyCh1EZWxldGVDaGF0Q29udmVyc2F0aW9uUmVxdWVzdBIRCgRuYW1lGAEgASgJQgPgQQIiYgoWU2VuZENoYXRNZXNzYWdlUmVxdWVzdBIUCgdjb250ZW50GAEgASgJQgPgQQISGQoMY29udmVyc2F0aW9uGAIgASgJQgPgQQISFwoKcmVxdWVzdF9pZBgDIAEoCUID4EECIoABChdTZW5kQ2hhdE1lc3NhZ2VSZXNwb25zZRIvCgx1c2VyX21lc3NhZ2UYASABKAsyGS5tZW1vcy5hcGkudjEuQ2hhdE1lc3NhZ2USNAoRYXNzaXN0YW50X21lc3NhZ2UYAiABKAsyGS5tZW1vcy5hcGkudjEuQ2hhdE1lc3NhZ2UyowcKCUFJU2VydmljZRJ5CgpUcmFuc2NyaWJlEh8ubWVtb3MuYXBpLnYxLlRyYW5zY3JpYmVSZXF1ZXN0GiAubWVtb3MuYXBpLnYxLlRyYW5zY3JpYmVSZXNwb25zZSIo2kEFYXVkaW+C0+STAho6ASoiFS9hcGkvdjEvYWk6dHJhbnNjcmliZRKSAQoWQ3JlYXRlQ2hhdENvbnZlcnNhdGlvbhIrLm1lbW9zLmFwaS52MS5DcmVhdGVDaGF0Q29udmVyc2F0aW9uUmVxdWVzdBoeLm1lbW9zLmFwaS52MS5DaGF0Q29udmVyc2F0aW9uIivaQQCC0+STAiI6ASoiHS9hcGkvdjEvYWkvY2hhdC9jb252ZXJzYXRpb25zEpoBChVMaXN0Q2hhdENvbnZlcnNhdGlvbnMSKi5tZW1vcy5hcGkudjEuTGlzdENoYXRDb252ZXJzYXRpb25zUmVxdWVzdBorLm1lbW9zLmFwaS52MS5MaXN0Q2hhdENvbnZlcnNhdGlvbnNSZXNwb25zZSIo2kEAgtPkkwIfEh0vYXBpL3YxL2FpL2NoYXQvY29udmVyc2F0aW9ucxKRAQoTR2V0Q2hhdENvbnZlcnNhdGlvbhIoLm1lbW9zLmFwaS52MS5HZXRDaGF0Q29udmVyc2F0aW9uUmVxdWVzdBoeLm1lbW9zLmFwaS52MS5DaGF0Q29udmVyc2F0aW9uIjDaQQRuYW1lgtPkkwIjEiEvYXBpL3YxL3tuYW1lPWFpL2NvbnZlcnNhdGlvbnMvKn0SjwEKFkRlbGV0ZUNoYXRDb252ZXJzYXRpb24SKy5tZW1vcy5hcGkudjEuRGVsZXRlQ2hhdENvbnZlcnNhdGlvblJlcXVlc3QaFi5nb29nbGUucHJvdG9idWYuRW1wdHkiMNpBBG5hbWWC0+STAiMqIS9hcGkvdjEve25hbWU9YWkvY29udmVyc2F0aW9ucy8qfRLCAQoPU2VuZENoYXRNZXNzYWdlEiQubWVtb3MuYXBpLnYxLlNlbmRDaGF0TWVzc2FnZVJlcXVlc3QaJS5tZW1vcy5hcGkudjEuU2VuZENoYXRNZXNzYWdlUmVzcG9uc2UiYtpBH2NvbnZlcnNhdGlvbixjb250ZW50LHJlcXVlc3RfaWSC0+STAjo6ASoiNS9hcGkvdjEve2NvbnZlcnNhdGlvbj1haS9jb252ZXJzYXRpb25zLyp9OnNlbmRNZXNzYWdlQqYBChBjb20ubWVtb3MuYXBpLnYxQg5BaVNlcnZpY2VQcm90b1ABWjBnaXRodWIuY29tL3VzZW1lbW9zL21lbW9zL3Byb3RvL2dlbi9hcGkvdjE7YXBpdjGiAgNNQViqAgxNZW1vcy5BcGkuVjHKAgxNZW1vc1xBcGlcVjHiAhhNZW1vc1xBcGlcVjFcR1BCTWV0YWRhdGHqAg5NZW1vczo6QXBpOjpWMWIGcHJvdG8z", [file_google_api_annotations, file_google_api_client, file_google_api_field_behavior, file_google_protobuf_empty, file_google_protobuf_timestamp]);
+  fileDesc("ChdhcGkvdjEvYWlfc2VydmljZS5wcm90bxIMbWVtb3MuYXBpLnYxIkkKEVRyYW5zY3JpYmVSZXF1ZXN0EjQKBWF1ZGlvGAEgASgLMiAubWVtb3MuYXBpLnYxLlRyYW5zY3JpcHRpb25BdWRpb0ID4EECIncKElRyYW5zY3JpcHRpb25BdWRpbxIWCgdjb250ZW50GAEgASgMQgPgQQRIABINCgN1cmkYAiABKAlIABIVCghmaWxlbmFtZRgDIAEoCUID4EEBEhkKDGNvbnRlbnRfdHlwZRgEIAEoCUID4EEBQggKBnNvdXJjZSIiChJUcmFuc2NyaWJlUmVzcG9uc2USDAoEdGV4dBgBIAEoCSKbAwoLQ2hhdE1lc3NhZ2USLAoEcm9sZRgBIAEoDjIeLm1lbW9zLmFwaS52MS5DaGF0TWVzc2FnZS5Sb2xlEg8KB2NvbnRlbnQYAiABKAkSLwoLY3JlYXRlX3RpbWUYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi0KCWNpdGF0aW9ucxgEIAMoCzIaLm1lbW9zLmFwaS52MS5DaGF0Q2l0YXRpb24SMAoGc3RhdHVzGAUgASgOMiAubWVtb3MuYXBpLnYxLkNoYXRNZXNzYWdlLlN0YXR1cxIPCgdhdHRlbXB0GAYgASgFEhkKEWNsaWVudF9yZXF1ZXN0X2lkGAcgASgJIjUKBFJvbGUSFAoQUk9MRV9VTlNQRUNJRklFRBAAEggKBFVTRVIQARINCglBU1NJU1RBTlQQAiJYCgZTdGF0dXMSFgoSU1RBVFVTX1VOU1BFQ0lGSUVEEAASDQoJU1RSRUFNSU5HEAESDAoIQ09NUExFVEUQAhIKCgZGQUlMRUQQAxINCglDQU5DRUxMRUQQBCItCgxDaGF0Q2l0YXRpb24SDAoEbWVtbxgBIAEoCRIPCgdzbmlwcGV0GAIgASgJItwBChBDaGF0Q29udmVyc2F0aW9uEisKCG1lc3NhZ2VzGAEgAygLMhkubWVtb3MuYXBpLnYxLkNoYXRNZXNzYWdlEhwKFGdlbmVyYXRpb25fYXZhaWxhYmxlGAIgASgIEgwKBG5hbWUYAyABKAkSDQoFdGl0bGUYBCABKAkSLwoLY3JlYXRlX3RpbWUYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi8KC3VwZGF0ZV90aW1lGAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIzCh1DcmVhdGVDaGF0Q29udmVyc2F0aW9uUmVxdWVzdBISCgV0aXRsZRgBIAEoCUID4EEBIh4KHExpc3RDaGF0Q29udmVyc2F0aW9uc1JlcXVlc3QidAodTGlzdENoYXRDb252ZXJzYXRpb25zUmVzcG9uc2USNQoNY29udmVyc2F0aW9ucxgBIAMoCzIeLm1lbW9zLmFwaS52MS5DaGF0Q29udmVyc2F0aW9uEhwKFGdlbmVyYXRpb25fYXZhaWxhYmxlGAIgASgIIi8KGkdldENoYXRDb252ZXJzYXRpb25SZXF1ZXN0EhEKBG5hbWUYASABKAlCA+BBAiIyCh1EZWxldGVDaGF0Q29udmVyc2F0aW9uUmVxdWVzdBIRCgRuYW1lGAEgASgJQgPgQQIiYgoWU2VuZENoYXRNZXNzYWdlUmVxdWVzdBIUCgdjb250ZW50GAEgASgJQgPgQQISGQoMY29udmVyc2F0aW9uGAIgASgJQgPgQQISFwoKcmVxdWVzdF9pZBgDIAEoCUID4EECIpQBChRTZW5kQ2hhdE1lc3NhZ2VFdmVudBIzCgVzdGFydBgBIAEoCzIiLm1lbW9zLmFwaS52MS5TZW5kQ2hhdE1lc3NhZ2VTdGFydEgAEg8KBWRlbHRhGAIgASgJSAASLQoIY29tcGxldGUYAyABKAsyGS5tZW1vcy5hcGkudjEuQ2hhdE1lc3NhZ2VIAEIHCgVldmVudCJ9ChRTZW5kQ2hhdE1lc3NhZ2VTdGFydBIvCgx1c2VyX21lc3NhZ2UYASABKAsyGS5tZW1vcy5hcGkudjEuQ2hhdE1lc3NhZ2USNAoRYXNzaXN0YW50X21lc3NhZ2UYAiABKAsyGS5tZW1vcy5hcGkudjEuQ2hhdE1lc3NhZ2Uy4gYKCUFJU2VydmljZRJ5CgpUcmFuc2NyaWJlEh8ubWVtb3MuYXBpLnYxLlRyYW5zY3JpYmVSZXF1ZXN0GiAubWVtb3MuYXBpLnYxLlRyYW5zY3JpYmVSZXNwb25zZSIo2kEFYXVkaW+C0+STAho6ASoiFS9hcGkvdjEvYWk6dHJhbnNjcmliZRKSAQoWQ3JlYXRlQ2hhdENvbnZlcnNhdGlvbhIrLm1lbW9zLmFwaS52MS5DcmVhdGVDaGF0Q29udmVyc2F0aW9uUmVxdWVzdBoeLm1lbW9zLmFwaS52MS5DaGF0Q29udmVyc2F0aW9uIivaQQCC0+STAiI6ASoiHS9hcGkvdjEvYWkvY2hhdC9jb252ZXJzYXRpb25zEpoBChVMaXN0Q2hhdENvbnZlcnNhdGlvbnMSKi5tZW1vcy5hcGkudjEuTGlzdENoYXRDb252ZXJzYXRpb25zUmVxdWVzdBorLm1lbW9zLmFwaS52MS5MaXN0Q2hhdENvbnZlcnNhdGlvbnNSZXNwb25zZSIo2kEAgtPkkwIfEh0vYXBpL3YxL2FpL2NoYXQvY29udmVyc2F0aW9ucxKRAQoTR2V0Q2hhdENvbnZlcnNhdGlvbhIoLm1lbW9zLmFwaS52MS5HZXRDaGF0Q29udmVyc2F0aW9uUmVxdWVzdBoeLm1lbW9zLmFwaS52MS5DaGF0Q29udmVyc2F0aW9uIjDaQQRuYW1lgtPkkwIjEiEvYXBpL3YxL3tuYW1lPWFpL2NvbnZlcnNhdGlvbnMvKn0SjwEKFkRlbGV0ZUNoYXRDb252ZXJzYXRpb24SKy5tZW1vcy5hcGkudjEuRGVsZXRlQ2hhdENvbnZlcnNhdGlvblJlcXVlc3QaFi5nb29nbGUucHJvdG9idWYuRW1wdHkiMNpBBG5hbWWC0+STAiMqIS9hcGkvdjEve25hbWU9YWkvY29udmVyc2F0aW9ucy8qfRKBAQoPU2VuZENoYXRNZXNzYWdlEiQubWVtb3MuYXBpLnYxLlNlbmRDaGF0TWVzc2FnZVJlcXVlc3QaIi5tZW1vcy5hcGkudjEuU2VuZENoYXRNZXNzYWdlRXZlbnQiItpBH2NvbnZlcnNhdGlvbixjb250ZW50LHJlcXVlc3RfaWQwAUKmAQoQY29tLm1lbW9zLmFwaS52MUIOQWlTZXJ2aWNlUHJvdG9QAVowZ2l0aHViLmNvbS91c2VtZW1vcy9tZW1vcy9wcm90by9nZW4vYXBpL3YxO2FwaXYxogIDTUFYqgIMTWVtb3MuQXBpLlYxygIMTWVtb3NcQXBpXFYx4gIYTWVtb3NcQXBpXFYxXEdQQk1ldGFkYXRh6gIOTWVtb3M6OkFwaTo6VjFiBnByb3RvMw", [file_google_api_annotations, file_google_api_client, file_google_api_field_behavior, file_google_protobuf_empty, file_google_protobuf_timestamp]);
 
 /**
  * @generated from message memos.api.v1.TranscribeRequest
@@ -472,9 +472,60 @@ export const SendChatMessageRequestSchema: GenMessage<SendChatMessageRequest> = 
   messageDesc(file_api_v1_ai_service, 11);
 
 /**
- * @generated from message memos.api.v1.SendChatMessageResponse
+ * SendChatMessageEvent is one event of a SendChatMessage stream.
+ *
+ * @generated from message memos.api.v1.SendChatMessageEvent
  */
-export type SendChatMessageResponse = Message<"memos.api.v1.SendChatMessageResponse"> & {
+export type SendChatMessageEvent = Message<"memos.api.v1.SendChatMessageEvent"> & {
+  /**
+   * The event payload.
+   *
+   * @generated from oneof memos.api.v1.SendChatMessageEvent.event
+   */
+  event: {
+    /**
+     * The first event: the stored user message and the assistant attempt
+     * being answered. A repeated request ID whose attempt is still active
+     * returns only this event; the stored state stays authoritative.
+     *
+     * @generated from field: memos.api.v1.SendChatMessageStart start = 1;
+     */
+    value: SendChatMessageStart;
+    case: "start";
+  } | {
+    /**
+     * An incremental assistant answer delta. Deltas concatenate into the
+     * answer but are not authoritative; the complete event is.
+     *
+     * @generated from field: string delta = 2;
+     */
+    value: string;
+    case: "delta";
+  } | {
+    /**
+     * The terminal event: the authoritative stored assistant attempt,
+     * whether it completed, failed, or was cancelled.
+     *
+     * @generated from field: memos.api.v1.ChatMessage complete = 3;
+     */
+    value: ChatMessage;
+    case: "complete";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message memos.api.v1.SendChatMessageEvent.
+ * Use `create(SendChatMessageEventSchema)` to create a new message.
+ */
+export const SendChatMessageEventSchema: GenMessage<SendChatMessageEvent> = /*@__PURE__*/
+  messageDesc(file_api_v1_ai_service, 12);
+
+/**
+ * SendChatMessageStart carries the persisted pair an answer streams for.
+ *
+ * @generated from message memos.api.v1.SendChatMessageStart
+ */
+export type SendChatMessageStart = Message<"memos.api.v1.SendChatMessageStart"> & {
   /**
    * The stored user message.
    *
@@ -483,7 +534,7 @@ export type SendChatMessageResponse = Message<"memos.api.v1.SendChatMessageRespo
   userMessage?: ChatMessage | undefined;
 
   /**
-   * The assistant's reply attempt.
+   * The assistant attempt answering it, still generating.
    *
    * @generated from field: memos.api.v1.ChatMessage assistant_message = 2;
    */
@@ -491,11 +542,11 @@ export type SendChatMessageResponse = Message<"memos.api.v1.SendChatMessageRespo
 };
 
 /**
- * Describes the message memos.api.v1.SendChatMessageResponse.
- * Use `create(SendChatMessageResponseSchema)` to create a new message.
+ * Describes the message memos.api.v1.SendChatMessageStart.
+ * Use `create(SendChatMessageStartSchema)` to create a new message.
  */
-export const SendChatMessageResponseSchema: GenMessage<SendChatMessageResponse> = /*@__PURE__*/
-  messageDesc(file_api_v1_ai_service, 12);
+export const SendChatMessageStartSchema: GenMessage<SendChatMessageStart> = /*@__PURE__*/
+  messageDesc(file_api_v1_ai_service, 13);
 
 /**
  * @generated from service memos.api.v1.AIService
@@ -556,15 +607,20 @@ export const AIService: GenService<{
   },
   /**
    * SendChatMessage sends a user message in one of the caller's AI chat
-   * conversations and returns the stored user message together with the
-   * assistant's reply attempt.
+   * conversations and streams the assistant's reply attempt. The stream
+   * starts with the stored user message and attempt, streams answer deltas,
+   * and ends with the authoritative stored assistant attempt. Reconnecting
+   * clients reconcile against the stored conversation state.
+   *
+   * Server streaming is served over the Connect endpoint only; the
+   * gRPC-Gateway JSON transport does not support streaming methods.
    *
    * @generated from rpc memos.api.v1.AIService.SendChatMessage
    */
   sendChatMessage: {
-    methodKind: "unary";
+    methodKind: "server_streaming";
     input: typeof SendChatMessageRequestSchema;
-    output: typeof SendChatMessageResponseSchema;
+    output: typeof SendChatMessageEventSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_api_v1_ai_service, 0);

@@ -46,9 +46,14 @@ type AIServiceClient interface {
 	// An attempt still generating is cancelled.
 	DeleteChatConversation(ctx context.Context, in *DeleteChatConversationRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// SendChatMessage sends a user message in one of the caller's AI chat
-	// conversations and returns the stored user message together with the
-	// assistant's reply attempt.
-	SendChatMessage(ctx context.Context, in *SendChatMessageRequest, opts ...grpc.CallOption) (*SendChatMessageResponse, error)
+	// conversations and streams the assistant's reply attempt. The stream
+	// starts with the stored user message and attempt, streams answer deltas,
+	// and ends with the authoritative stored assistant attempt. Reconnecting
+	// clients reconcile against the stored conversation state.
+	//
+	// Server streaming is served over the Connect endpoint only; the
+	// gRPC-Gateway JSON transport does not support streaming methods.
+	SendChatMessage(ctx context.Context, in *SendChatMessageRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SendChatMessageEvent], error)
 }
 
 type aIServiceClient struct {
@@ -109,15 +114,24 @@ func (c *aIServiceClient) DeleteChatConversation(ctx context.Context, in *Delete
 	return out, nil
 }
 
-func (c *aIServiceClient) SendChatMessage(ctx context.Context, in *SendChatMessageRequest, opts ...grpc.CallOption) (*SendChatMessageResponse, error) {
+func (c *aIServiceClient) SendChatMessage(ctx context.Context, in *SendChatMessageRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SendChatMessageEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SendChatMessageResponse)
-	err := c.cc.Invoke(ctx, AIService_SendChatMessage_FullMethodName, in, out, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AIService_ServiceDesc.Streams[0], AIService_SendChatMessage_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &grpc.GenericClientStream[SendChatMessageRequest, SendChatMessageEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AIService_SendChatMessageClient = grpc.ServerStreamingClient[SendChatMessageEvent]
 
 // AIServiceServer is the server API for AIService service.
 // All implementations must embed UnimplementedAIServiceServer
@@ -137,9 +151,14 @@ type AIServiceServer interface {
 	// An attempt still generating is cancelled.
 	DeleteChatConversation(context.Context, *DeleteChatConversationRequest) (*emptypb.Empty, error)
 	// SendChatMessage sends a user message in one of the caller's AI chat
-	// conversations and returns the stored user message together with the
-	// assistant's reply attempt.
-	SendChatMessage(context.Context, *SendChatMessageRequest) (*SendChatMessageResponse, error)
+	// conversations and streams the assistant's reply attempt. The stream
+	// starts with the stored user message and attempt, streams answer deltas,
+	// and ends with the authoritative stored assistant attempt. Reconnecting
+	// clients reconcile against the stored conversation state.
+	//
+	// Server streaming is served over the Connect endpoint only; the
+	// gRPC-Gateway JSON transport does not support streaming methods.
+	SendChatMessage(*SendChatMessageRequest, grpc.ServerStreamingServer[SendChatMessageEvent]) error
 	mustEmbedUnimplementedAIServiceServer()
 }
 
@@ -165,8 +184,8 @@ func (UnimplementedAIServiceServer) GetChatConversation(context.Context, *GetCha
 func (UnimplementedAIServiceServer) DeleteChatConversation(context.Context, *DeleteChatConversationRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteChatConversation not implemented")
 }
-func (UnimplementedAIServiceServer) SendChatMessage(context.Context, *SendChatMessageRequest) (*SendChatMessageResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SendChatMessage not implemented")
+func (UnimplementedAIServiceServer) SendChatMessage(*SendChatMessageRequest, grpc.ServerStreamingServer[SendChatMessageEvent]) error {
+	return status.Error(codes.Unimplemented, "method SendChatMessage not implemented")
 }
 func (UnimplementedAIServiceServer) mustEmbedUnimplementedAIServiceServer() {}
 func (UnimplementedAIServiceServer) testEmbeddedByValue()                   {}
@@ -279,23 +298,16 @@ func _AIService_DeleteChatConversation_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AIService_SendChatMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SendChatMessageRequest)
-	if err := dec(in); err != nil {
-		return nil, err
+func _AIService_SendChatMessage_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SendChatMessageRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	if interceptor == nil {
-		return srv.(AIServiceServer).SendChatMessage(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AIService_SendChatMessage_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AIServiceServer).SendChatMessage(ctx, req.(*SendChatMessageRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(AIServiceServer).SendChatMessage(m, &grpc.GenericServerStream[SendChatMessageRequest, SendChatMessageEvent]{ServerStream: stream})
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AIService_SendChatMessageServer = grpc.ServerStreamingServer[SendChatMessageEvent]
 
 // AIService_ServiceDesc is the grpc.ServiceDesc for AIService service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -324,11 +336,13 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "DeleteChatConversation",
 			Handler:    _AIService_DeleteChatConversation_Handler,
 		},
+	},
+	Streams: []grpc.StreamDesc{
 		{
-			MethodName: "SendChatMessage",
-			Handler:    _AIService_SendChatMessage_Handler,
+			StreamName:    "SendChatMessage",
+			Handler:       _AIService_SendChatMessage_Handler,
+			ServerStreams: true,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
 	Metadata: "api/v1/ai_service.proto",
 }

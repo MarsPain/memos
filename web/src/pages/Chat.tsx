@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { LoaderIcon, MessageSquareIcon, PlusIcon, SendIcon, Trash2Icon } from "lucide-react";
+import { LoaderIcon, MessageSquareIcon, PlusIcon, RotateCcwIcon, SendIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "react-hot-toast";
 import { Link } from "react-router-dom";
@@ -11,7 +11,7 @@ import {
   useChatConversations,
   useCreateChatConversation,
   useDeleteChatConversation,
-  useSendChatMessage,
+  useSendChatMessageStream,
 } from "@/hooks/useAIQueries";
 import useDialog from "@/hooks/useDialog";
 import { cn } from "@/lib/utils";
@@ -19,32 +19,50 @@ import { ROUTES } from "@/router";
 import { ChatMessage_Role, ChatMessage_Status, type ChatMessage as ChatMessageType } from "@/types/proto/api/v1/ai_service_pb";
 import { useTranslate } from "@/utils/i18n";
 
-const ChatMessageBubble = ({ message }: { message: ChatMessageType }) => {
+const ChatMessageBubble = ({
+  message,
+  streamedContent,
+  onRetry,
+}: {
+  message: ChatMessageType;
+  // Incremental answer text of the active stream; overlays the empty content
+  // of the attempt still generating.
+  streamedContent?: string;
+  onRetry?: () => void;
+}) => {
   const t = useTranslate();
   const isUser = message.role === ChatMessage_Role.USER;
+  const content = streamedContent ?? message.content;
 
   return (
     <div className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}>
       <div className={cn("flex max-w-[80%] flex-col gap-1", isUser && "items-end")}>
         <span className="text-xs font-medium text-muted-foreground">{isUser ? t("chat.you") : t("chat.assistant")}</span>
-        {message.content !== "" && (
+        {content !== "" && (
           <div
             className={cn(
               "rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap break-words",
               isUser ? "bg-primary text-primary-foreground" : "bg-muted text-foreground",
             )}
           >
-            {message.content}
+            {content}
           </div>
         )}
         {!isUser && message.status === ChatMessage_Status.STREAMING && (
           <span className="text-xs text-muted-foreground">{t("chat.generating")}</span>
         )}
-        {!isUser && message.status === ChatMessage_Status.FAILED && (
-          <span className="text-xs text-destructive">{t("chat.answer-failed")}</span>
-        )}
-        {!isUser && message.status === ChatMessage_Status.CANCELLED && (
-          <span className="text-xs text-muted-foreground">{t("chat.answer-cancelled")}</span>
+        {!isUser && (message.status === ChatMessage_Status.FAILED || message.status === ChatMessage_Status.CANCELLED) && (
+          <div className="flex items-center gap-2">
+            <span className={cn("text-xs", message.status === ChatMessage_Status.FAILED ? "text-destructive" : "text-muted-foreground")}>
+              {message.status === ChatMessage_Status.FAILED ? t("chat.answer-failed") : t("chat.answer-cancelled")}
+            </span>
+            {onRetry && (
+              <Button variant="outline" size="sm" className="h-6 gap-1 px-2 text-xs" onClick={onRetry}>
+                <RotateCcwIcon className="h-3 w-3" />
+                {t("chat.retry")}
+              </Button>
+            )}
+          </div>
         )}
         {message.citations.length > 0 && (
           <div className="flex flex-wrap gap-1">
@@ -66,6 +84,41 @@ const ChatMessageBubble = ({ message }: { message: ChatMessageType }) => {
   );
 };
 
+// computeRetryTargets maps the index of each retryable assistant message to
+// the user message it answers. An attempt is retryable when it failed or was
+// cancelled and is the latest attempt of its user message; retries resend
+// the same request ID.
+const computeRetryTargets = (messages: ChatMessageType[]): Map<number, ChatMessageType> => {
+  const userByAttemptIndex = new Map<number, ChatMessageType>();
+  let lastUserMessage: ChatMessageType | undefined;
+  messages.forEach((message, index) => {
+    if (message.role === ChatMessage_Role.USER) {
+      lastUserMessage = message;
+    } else if (lastUserMessage) {
+      userByAttemptIndex.set(index, lastUserMessage);
+    }
+  });
+  const targets = new Map<number, ChatMessageType>();
+  let sawAssistant = false;
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (message.role === ChatMessage_Role.ASSISTANT) {
+      const userMessage = userByAttemptIndex.get(index);
+      if (
+        !sawAssistant &&
+        (message.status === ChatMessage_Status.FAILED || message.status === ChatMessage_Status.CANCELLED) &&
+        userMessage
+      ) {
+        targets.set(index, userMessage);
+      }
+      sawAssistant = true;
+    } else {
+      sawAssistant = false;
+    }
+  }
+  return targets;
+};
+
 const Chat = () => {
   const t = useTranslate();
   const conversationsQuery = useChatConversations();
@@ -81,13 +134,24 @@ const Chat = () => {
   const conversationQuery = useChatConversation(activeName);
   const createConversationMutation = useCreateChatConversation();
   const deleteConversationMutation = useDeleteChatConversation();
-  const sendMessageMutation = useSendChatMessage();
+  const sendStream = useSendChatMessageStream(activeName);
   const deleteDialog = useDialog();
   const [deletingName, setDeletingName] = useState<string | undefined>(undefined);
   const [input, setInput] = useState("");
 
   const messages = conversationQuery.data?.messages ?? [];
-  const sendDisabled = input.trim() === "" || !activeName || sendMessageMutation.isPending;
+  const sendDisabled = input.trim() === "" || !activeName || sendStream.isStreaming;
+
+  // The active stream renders its deltas into the bubble of the attempt
+  // still generating, which the start event inserted as the last message.
+  const activeAttemptIndex =
+    sendStream.isStreaming && messages.length > 0 && messages[messages.length - 1].status === ChatMessage_Status.STREAMING
+      ? messages.length - 1
+      : -1;
+
+  // A failed or cancelled attempt can be retried only when it is the latest
+  // attempt of its user message; retries resend the same request ID.
+  const retryTargets = computeRetryTargets(messages);
 
   const handleNewChat = () => {
     createConversationMutation.mutate(undefined, {
@@ -111,24 +175,31 @@ const Chat = () => {
     }
   };
 
+  const handleSendError = (error: unknown) => {
+    if (error instanceof ConnectError && error.code === Code.FailedPrecondition) {
+      toast.error(t("chat.unavailable-description"));
+    } else if (error instanceof ConnectError && error.code === Code.ResourceExhausted) {
+      toast.error(t("chat.rate-limited"));
+    } else {
+      toast.error(t("chat.send-failed"));
+    }
+  };
+
   const handleSend = () => {
     const content = input.trim();
-    if (content === "" || !activeName || sendMessageMutation.isPending) {
+    if (content === "" || !activeName || sendStream.isStreaming) {
       return;
     }
-    sendMessageMutation.mutate(
-      { conversation: activeName, content, requestId: crypto.randomUUID() },
-      {
-        onSuccess: () => setInput(""),
-        onError: (error) => {
-          if (error instanceof ConnectError && error.code === Code.FailedPrecondition) {
-            toast.error(t("chat.unavailable-description"));
-          } else {
-            toast.error(t("chat.send-failed"));
-          }
-        },
-      },
-    );
+    // The input clears once the message is durably stored (the start event),
+    // so a rejected send loses nothing.
+    sendStream.send({ content, requestId: crypto.randomUUID() }, () => setInput("")).catch(handleSendError);
+  };
+
+  const handleRetry = (userMessage: ChatMessageType) => {
+    if (!activeName || sendStream.isStreaming) {
+      return;
+    }
+    sendStream.send({ content: userMessage.content, requestId: userMessage.clientRequestId }).catch(handleSendError);
   };
 
   if (conversationsQuery.isPending) {
@@ -219,7 +290,16 @@ const Chat = () => {
                 ) : (
                   <div className="flex flex-col gap-4">
                     {messages.map((message, index) => (
-                      <ChatMessageBubble key={message.clientRequestId || `${message.role}-${index}`} message={message} />
+                      <ChatMessageBubble
+                        key={message.clientRequestId || `${message.role}-${index}`}
+                        message={message}
+                        streamedContent={index === activeAttemptIndex ? sendStream.streamedContent : undefined}
+                        onRetry={
+                          retryTargets.has(index) && !sendStream.isStreaming
+                            ? () => handleRetry(retryTargets.get(index) as ChatMessageType)
+                            : undefined
+                        }
+                      />
                     ))}
                   </div>
                 )}

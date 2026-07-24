@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/usememos/memos/internal/ai"
@@ -15,6 +16,31 @@ import (
 	storepb "github.com/usememos/memos/proto/gen/store"
 	"github.com/usememos/memos/store"
 )
+
+// fakeChatStream is a grpc.ServerStreamingServer that collects sent events.
+type fakeChatStream struct {
+	ctx    context.Context
+	events []*v1pb.SendChatMessageEvent
+}
+
+func (s *fakeChatStream) Send(event *v1pb.SendChatMessageEvent) error {
+	s.events = append(s.events, event)
+	return nil
+}
+
+func (*fakeChatStream) SetHeader(metadata.MD) error  { return nil }
+func (*fakeChatStream) SendHeader(metadata.MD) error { return nil }
+func (*fakeChatStream) SetTrailer(metadata.MD)       {}
+func (s *fakeChatStream) Context() context.Context   { return s.ctx }
+func (*fakeChatStream) SendMsg(any) error            { return nil }
+func (*fakeChatStream) RecvMsg(any) error            { return nil }
+
+// sendChat streams a SendChatMessage call and returns the collected events.
+func sendChat(ctx context.Context, ts *TestService, request *v1pb.SendChatMessageRequest) (*fakeChatStream, error) {
+	stream := &fakeChatStream{ctx: ctx}
+	err := ts.Service.SendChatMessage(request, stream)
+	return stream, err
+}
 
 func configureChatGeneration(ctx context.Context, t *testing.T, ts *TestService) {
 	t.Helper()
@@ -46,7 +72,7 @@ func TestSendChatMessage(t *testing.T) {
 		ts := NewTestService(t)
 		defer ts.Cleanup()
 
-		_, err := ts.Service.SendChatMessage(ctx, &v1pb.SendChatMessageRequest{Conversation: "ai/conversations/abc", Content: "hello", RequestId: "req-1"})
+		_, err := sendChat(ctx, ts, &v1pb.SendChatMessageRequest{Conversation: "ai/conversations/abc", Content: "hello", RequestId: "req-1"})
 		require.Equal(t, codes.Unauthenticated, status.Code(err))
 	})
 
@@ -59,7 +85,7 @@ func TestSendChatMessage(t *testing.T) {
 		userCtx := ts.CreateUserContext(ctx, user.ID)
 		conversation := createChatConversation(ctx, t, ts, userCtx)
 
-		_, err = ts.Service.SendChatMessage(userCtx, &v1pb.SendChatMessageRequest{Conversation: conversation.GetName(), Content: "hello", RequestId: "req-1"})
+		_, err = sendChat(userCtx, ts, &v1pb.SendChatMessageRequest{Conversation: conversation.GetName(), Content: "hello", RequestId: "req-1"})
 		require.Equal(t, codes.FailedPrecondition, status.Code(err))
 
 		fetched, err := ts.Service.GetChatConversation(userCtx, &v1pb.GetChatConversationRequest{Name: conversation.GetName()})
@@ -77,20 +103,20 @@ func TestSendChatMessage(t *testing.T) {
 		userCtx := ts.CreateUserContext(ctx, user.ID)
 		conversation := createChatConversation(ctx, t, ts, userCtx)
 
-		_, err = ts.Service.SendChatMessage(userCtx, &v1pb.SendChatMessageRequest{Conversation: conversation.GetName(), Content: "  ", RequestId: "req-1"})
+		_, err = sendChat(userCtx, ts, &v1pb.SendChatMessageRequest{Conversation: conversation.GetName(), Content: "  ", RequestId: "req-1"})
 		require.Equal(t, codes.InvalidArgument, status.Code(err))
 
-		_, err = ts.Service.SendChatMessage(userCtx, &v1pb.SendChatMessageRequest{Conversation: conversation.GetName(), Content: "hello"})
+		_, err = sendChat(userCtx, ts, &v1pb.SendChatMessageRequest{Conversation: conversation.GetName(), Content: "hello"})
 		require.Equal(t, codes.InvalidArgument, status.Code(err))
 
-		_, err = ts.Service.SendChatMessage(userCtx, &v1pb.SendChatMessageRequest{Conversation: "memos/abc", Content: "hello", RequestId: "req-1"})
+		_, err = sendChat(userCtx, ts, &v1pb.SendChatMessageRequest{Conversation: "memos/abc", Content: "hello", RequestId: "req-1"})
 		require.Equal(t, codes.InvalidArgument, status.Code(err))
 
-		_, err = ts.Service.SendChatMessage(userCtx, &v1pb.SendChatMessageRequest{Conversation: "ai/conversations/missing", Content: "hello", RequestId: "req-1"})
+		_, err = sendChat(userCtx, ts, &v1pb.SendChatMessageRequest{Conversation: "ai/conversations/missing", Content: "hello", RequestId: "req-1"})
 		require.Equal(t, codes.NotFound, status.Code(err))
 	})
 
-	t.Run("returns grounded answer with citations", func(t *testing.T) {
+	t.Run("streams grounded answer with citations", func(t *testing.T) {
 		ts := NewTestService(t)
 		defer ts.Cleanup()
 
@@ -109,30 +135,42 @@ func TestSendChatMessage(t *testing.T) {
 
 		// AIModelFactory is overridden after struct-literal construction; the
 		// chat service must pick it up through lazy initialization.
-		fake := &aitest.Model{GenerateResponse: ai.GenerationResponse{Content: "The alpine lakes trail is your favorite hiking spot."}}
+		fake := &aitest.Model{StreamEvents: []ai.StreamEvent{
+			{Delta: "The alpine lakes trail "},
+			{Delta: "is your favorite hiking spot."},
+		}}
 		ts.Service.AIModelFactory = func(ai.ProviderConfig, *http.Client) (ai.Model, error) {
 			return fake, nil
 		}
 
 		conversation := createChatConversation(ctx, t, ts, userCtx)
-		response, err := ts.Service.SendChatMessage(userCtx, &v1pb.SendChatMessageRequest{
+		stream, err := sendChat(userCtx, ts, &v1pb.SendChatMessageRequest{
 			Conversation: conversation.GetName(),
 			Content:      "Where should I go hiking",
 			RequestId:    "req-1",
 		})
 		require.NoError(t, err)
-		require.Equal(t, v1pb.ChatMessage_USER, response.GetUserMessage().GetRole())
-		require.Equal(t, v1pb.ChatMessage_COMPLETE, response.GetUserMessage().GetStatus())
-		require.Equal(t, "Where should I go hiking", response.GetUserMessage().GetContent())
-		require.Equal(t, "req-1", response.GetUserMessage().GetClientRequestId())
-		require.NotNil(t, response.GetUserMessage().GetCreateTime())
-		require.Equal(t, v1pb.ChatMessage_ASSISTANT, response.GetAssistantMessage().GetRole())
-		require.Equal(t, v1pb.ChatMessage_COMPLETE, response.GetAssistantMessage().GetStatus())
-		require.Equal(t, int32(1), response.GetAssistantMessage().GetAttempt())
-		require.Equal(t, "The alpine lakes trail is your favorite hiking spot.", response.GetAssistantMessage().GetContent())
-		require.Len(t, response.GetAssistantMessage().GetCitations(), 1)
-		require.Equal(t, "memos/"+memo.UID, response.GetAssistantMessage().GetCitations()[0].GetMemo())
-		require.NotEmpty(t, response.GetAssistantMessage().GetCitations()[0].GetSnippet())
+		// The stream is start, deltas, then the authoritative stored attempt.
+		require.Len(t, stream.events, 4)
+		start := stream.events[0].GetStart()
+		require.NotNil(t, start)
+		require.Equal(t, v1pb.ChatMessage_USER, start.GetUserMessage().GetRole())
+		require.Equal(t, v1pb.ChatMessage_COMPLETE, start.GetUserMessage().GetStatus())
+		require.Equal(t, "Where should I go hiking", start.GetUserMessage().GetContent())
+		require.Equal(t, "req-1", start.GetUserMessage().GetClientRequestId())
+		require.NotNil(t, start.GetUserMessage().GetCreateTime())
+		require.Equal(t, v1pb.ChatMessage_ASSISTANT, start.GetAssistantMessage().GetRole())
+		require.Equal(t, v1pb.ChatMessage_STREAMING, start.GetAssistantMessage().GetStatus())
+		require.Equal(t, int32(1), start.GetAssistantMessage().GetAttempt())
+		require.Equal(t, "The alpine lakes trail ", stream.events[1].GetDelta())
+		require.Equal(t, "is your favorite hiking spot.", stream.events[2].GetDelta())
+		complete := stream.events[3].GetComplete()
+		require.NotNil(t, complete)
+		require.Equal(t, v1pb.ChatMessage_COMPLETE, complete.GetStatus())
+		require.Equal(t, "The alpine lakes trail is your favorite hiking spot.", complete.GetContent())
+		require.Len(t, complete.GetCitations(), 1)
+		require.Equal(t, "memos/"+memo.UID, complete.GetCitations()[0].GetMemo())
+		require.NotEmpty(t, complete.GetCitations()[0].GetSnippet())
 
 		fetched, err := ts.Service.GetChatConversation(userCtx, &v1pb.GetChatConversationRequest{Name: conversation.GetName()})
 		require.NoError(t, err)
@@ -142,15 +180,17 @@ func TestSendChatMessage(t *testing.T) {
 		require.Equal(t, v1pb.ChatMessage_USER, fetched.GetMessages()[0].GetRole())
 		require.Equal(t, v1pb.ChatMessage_ASSISTANT, fetched.GetMessages()[1].GetRole())
 
-		// A repeated request ID returns the stored pair without regenerating.
-		duplicate, err := ts.Service.SendChatMessage(userCtx, &v1pb.SendChatMessageRequest{
+		// A repeated request ID replays the stored pair without regenerating.
+		duplicate, err := sendChat(userCtx, ts, &v1pb.SendChatMessageRequest{
 			Conversation: conversation.GetName(),
 			Content:      "Where should I go hiking",
 			RequestId:    "req-1",
 		})
 		require.NoError(t, err)
-		require.Equal(t, response.GetAssistantMessage().GetContent(), duplicate.GetAssistantMessage().GetContent())
-		require.Len(t, fake.GenerationRequests, 1)
+		require.Len(t, duplicate.events, 2)
+		require.NotNil(t, duplicate.events[0].GetStart())
+		require.Equal(t, complete.GetContent(), duplicate.events[1].GetComplete().GetContent())
+		require.Len(t, fake.StreamRequests, 1)
 	})
 
 	t.Run("conversation requires authentication", func(t *testing.T) {

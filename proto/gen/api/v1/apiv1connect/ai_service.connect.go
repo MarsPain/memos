@@ -69,9 +69,14 @@ type AIServiceClient interface {
 	// An attempt still generating is cancelled.
 	DeleteChatConversation(context.Context, *connect.Request[v1.DeleteChatConversationRequest]) (*connect.Response[emptypb.Empty], error)
 	// SendChatMessage sends a user message in one of the caller's AI chat
-	// conversations and returns the stored user message together with the
-	// assistant's reply attempt.
-	SendChatMessage(context.Context, *connect.Request[v1.SendChatMessageRequest]) (*connect.Response[v1.SendChatMessageResponse], error)
+	// conversations and streams the assistant's reply attempt. The stream
+	// starts with the stored user message and attempt, streams answer deltas,
+	// and ends with the authoritative stored assistant attempt. Reconnecting
+	// clients reconcile against the stored conversation state.
+	//
+	// Server streaming is served over the Connect endpoint only; the
+	// gRPC-Gateway JSON transport does not support streaming methods.
+	SendChatMessage(context.Context, *connect.Request[v1.SendChatMessageRequest]) (*connect.ServerStreamForClient[v1.SendChatMessageEvent], error)
 }
 
 // NewAIServiceClient constructs a client for the memos.api.v1.AIService service. By default, it
@@ -115,7 +120,7 @@ func NewAIServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...c
 			connect.WithSchema(aIServiceMethods.ByName("DeleteChatConversation")),
 			connect.WithClientOptions(opts...),
 		),
-		sendChatMessage: connect.NewClient[v1.SendChatMessageRequest, v1.SendChatMessageResponse](
+		sendChatMessage: connect.NewClient[v1.SendChatMessageRequest, v1.SendChatMessageEvent](
 			httpClient,
 			baseURL+AIServiceSendChatMessageProcedure,
 			connect.WithSchema(aIServiceMethods.ByName("SendChatMessage")),
@@ -131,7 +136,7 @@ type aIServiceClient struct {
 	listChatConversations  *connect.Client[v1.ListChatConversationsRequest, v1.ListChatConversationsResponse]
 	getChatConversation    *connect.Client[v1.GetChatConversationRequest, v1.ChatConversation]
 	deleteChatConversation *connect.Client[v1.DeleteChatConversationRequest, emptypb.Empty]
-	sendChatMessage        *connect.Client[v1.SendChatMessageRequest, v1.SendChatMessageResponse]
+	sendChatMessage        *connect.Client[v1.SendChatMessageRequest, v1.SendChatMessageEvent]
 }
 
 // Transcribe calls memos.api.v1.AIService.Transcribe.
@@ -160,8 +165,8 @@ func (c *aIServiceClient) DeleteChatConversation(ctx context.Context, req *conne
 }
 
 // SendChatMessage calls memos.api.v1.AIService.SendChatMessage.
-func (c *aIServiceClient) SendChatMessage(ctx context.Context, req *connect.Request[v1.SendChatMessageRequest]) (*connect.Response[v1.SendChatMessageResponse], error) {
-	return c.sendChatMessage.CallUnary(ctx, req)
+func (c *aIServiceClient) SendChatMessage(ctx context.Context, req *connect.Request[v1.SendChatMessageRequest]) (*connect.ServerStreamForClient[v1.SendChatMessageEvent], error) {
+	return c.sendChatMessage.CallServerStream(ctx, req)
 }
 
 // AIServiceHandler is an implementation of the memos.api.v1.AIService service.
@@ -180,9 +185,14 @@ type AIServiceHandler interface {
 	// An attempt still generating is cancelled.
 	DeleteChatConversation(context.Context, *connect.Request[v1.DeleteChatConversationRequest]) (*connect.Response[emptypb.Empty], error)
 	// SendChatMessage sends a user message in one of the caller's AI chat
-	// conversations and returns the stored user message together with the
-	// assistant's reply attempt.
-	SendChatMessage(context.Context, *connect.Request[v1.SendChatMessageRequest]) (*connect.Response[v1.SendChatMessageResponse], error)
+	// conversations and streams the assistant's reply attempt. The stream
+	// starts with the stored user message and attempt, streams answer deltas,
+	// and ends with the authoritative stored assistant attempt. Reconnecting
+	// clients reconcile against the stored conversation state.
+	//
+	// Server streaming is served over the Connect endpoint only; the
+	// gRPC-Gateway JSON transport does not support streaming methods.
+	SendChatMessage(context.Context, *connect.Request[v1.SendChatMessageRequest], *connect.ServerStream[v1.SendChatMessageEvent]) error
 }
 
 // NewAIServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -222,7 +232,7 @@ func NewAIServiceHandler(svc AIServiceHandler, opts ...connect.HandlerOption) (s
 		connect.WithSchema(aIServiceMethods.ByName("DeleteChatConversation")),
 		connect.WithHandlerOptions(opts...),
 	)
-	aIServiceSendChatMessageHandler := connect.NewUnaryHandler(
+	aIServiceSendChatMessageHandler := connect.NewServerStreamHandler(
 		AIServiceSendChatMessageProcedure,
 		svc.SendChatMessage,
 		connect.WithSchema(aIServiceMethods.ByName("SendChatMessage")),
@@ -271,6 +281,6 @@ func (UnimplementedAIServiceHandler) DeleteChatConversation(context.Context, *co
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("memos.api.v1.AIService.DeleteChatConversation is not implemented"))
 }
 
-func (UnimplementedAIServiceHandler) SendChatMessage(context.Context, *connect.Request[v1.SendChatMessageRequest]) (*connect.Response[v1.SendChatMessageResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("memos.api.v1.AIService.SendChatMessage is not implemented"))
+func (UnimplementedAIServiceHandler) SendChatMessage(context.Context, *connect.Request[v1.SendChatMessageRequest], *connect.ServerStream[v1.SendChatMessageEvent]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("memos.api.v1.AIService.SendChatMessage is not implemented"))
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -112,30 +113,47 @@ func (s *APIV1Service) DeleteChatConversation(ctx context.Context, request *v1pb
 	return &emptypb.Empty{}, nil
 }
 
-// SendChatMessage answers one user message grounded in the caller's memos and
-// returns the stored user message and assistant attempt. Repeating a request
-// ID returns the existing pair instead of duplicating the user message.
-func (s *APIV1Service) SendChatMessage(ctx context.Context, request *v1pb.SendChatMessageRequest) (*v1pb.SendChatMessageResponse, error) {
+// SendChatMessage streams the assistant's reply attempt for one user message
+// over the gRPC-Gateway as a chunked response. Connect clients use the
+// handler in connect_services.go; both share streamChatMessage.
+func (s *APIV1Service) SendChatMessage(request *v1pb.SendChatMessageRequest, stream grpc.ServerStreamingServer[v1pb.SendChatMessageEvent]) error {
+	return s.streamChatMessage(stream.Context(), request, stream.Send)
+}
+
+// streamChatMessage drives a streaming send, converting chat service events
+// to their API proto form.
+func (s *APIV1Service) streamChatMessage(ctx context.Context, request *v1pb.SendChatMessageRequest, send func(*v1pb.SendChatMessageEvent) error) error {
 	user, err := s.fetchCurrentUser(ctx)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to get current user: %v", err)
+		return status.Errorf(codes.Internal, "failed to get current user: %v", err)
 	}
 	if user == nil {
-		return nil, status.Errorf(codes.Unauthenticated, "user not authenticated")
+		return status.Errorf(codes.Unauthenticated, "user not authenticated")
 	}
 
 	uid, err := extractAIConversationUID(request.GetConversation())
 	if err != nil {
-		return nil, err
+		return err
 	}
-	userMessage, assistantMessage, err := s.chatService().SendMessage(ctx, user, uid, request.GetContent(), request.GetRequestId())
-	if err != nil {
-		return nil, err
+	return s.chatService().SendMessageStream(ctx, user, uid, request.GetContent(), request.GetRequestId(), func(event serverai.StreamEvent) error {
+		return send(convertChatStreamEventToProto(event))
+	})
+}
+
+// convertChatStreamEventToProto maps a chat service stream event to its API
+// proto form.
+func convertChatStreamEventToProto(event serverai.StreamEvent) *v1pb.SendChatMessageEvent {
+	switch {
+	case event.Start != nil:
+		return &v1pb.SendChatMessageEvent{Event: &v1pb.SendChatMessageEvent_Start{Start: &v1pb.SendChatMessageStart{
+			UserMessage:      convertChatMessageToProto(event.Start.UserMessage),
+			AssistantMessage: convertChatMessageToProto(event.Start.AssistantMessage),
+		}}}
+	case event.Complete != nil:
+		return &v1pb.SendChatMessageEvent{Event: &v1pb.SendChatMessageEvent_Complete{Complete: convertChatMessageToProto(*event.Complete)}}
+	default:
+		return &v1pb.SendChatMessageEvent{Event: &v1pb.SendChatMessageEvent_Delta{Delta: event.Delta}}
 	}
-	return &v1pb.SendChatMessageResponse{
-		UserMessage:      convertChatMessageToProto(userMessage),
-		AssistantMessage: convertChatMessageToProto(assistantMessage),
-	}, nil
 }
 
 // extractAIConversationUID parses the UID out of a conversation resource

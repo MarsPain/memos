@@ -116,8 +116,12 @@ func (*LoggingInterceptor) WrapStreamingClient(next connect.StreamingClientFunc)
 	return next // No-op for server-side interceptor
 }
 
-func (*LoggingInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
-	return next // Streaming not used in this service
+func (in *LoggingInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
+	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
+		err := next(ctx, conn)
+		in.log(conn.Spec().Procedure, err)
+		return err
+	}
 }
 
 func (in *LoggingInterceptor) log(procedure string, err error) {
@@ -187,8 +191,16 @@ func (*RecoveryInterceptor) WrapStreamingClient(next connect.StreamingClientFunc
 	return next
 }
 
-func (*RecoveryInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
-	return next
+func (in *RecoveryInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
+	return func(ctx context.Context, conn connect.StreamingHandlerConn) (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				in.logPanic(conn.Spec().Procedure, r)
+				err = connect.NewError(connect.CodeInternal, pkgerrors.New("internal server error"))
+			}
+		}()
+		return next(ctx, conn)
+	}
 }
 
 func (in *RecoveryInterceptor) logPanic(procedure string, panicValue any) {
@@ -234,6 +246,17 @@ func (*AuthInterceptor) WrapStreamingClient(next connect.StreamingClientFunc) co
 	return next
 }
 
-func (*AuthInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
-	return next
+func (in *AuthInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {
+	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
+		authHeader := conn.RequestHeader().Get("Authorization")
+
+		result := in.authorizer.Authenticate(ctx, authHeader)
+		if err := in.authorizer.CheckAccess(ctx, conn.Spec().Procedure, result); err != nil {
+			return connect.NewError(connect.CodeUnauthenticated, err)
+		}
+
+		ctx = auth.ApplyToContext(ctx, result)
+
+		return next(ctx, conn)
+	}
 }

@@ -109,6 +109,8 @@ func (s *Service) DeleteConversation(ctx context.Context, user *store.User, uid 
 	}
 	s.active.cancelAll(conversation.ID)
 	if err := s.store.DeleteAIConversation(ctx, &store.DeleteAIConversation{ID: conversation.ID}); err != nil {
+		// The conversation survived: lift the tombstone so it accepts sends.
+		s.active.restore(conversation.ID)
 		return status.Errorf(codes.Internal, "failed to delete conversation: %v", err)
 	}
 	return nil
@@ -135,23 +137,36 @@ func (s *Service) findConversation(ctx context.Context, user *store.User, uid st
 }
 
 // activeAttempts tracks in-flight assistant attempts per conversation so
-// deleting a conversation cancels generation that is still running.
+// deleting a conversation cancels generation that is still running. A
+// conversation that entered deletion is tombstoned so late registrations
+// fail instead of leaking an uncancellable generation.
 type activeAttempts struct {
 	mu             sync.Mutex
-	byConversation map[int32]map[int32]context.CancelFunc
+	byConversation map[int32]map[int32]context.CancelCauseFunc
+	deleting       map[int32]struct{}
 }
 
 func newActiveAttempts() *activeAttempts {
-	return &activeAttempts{byConversation: make(map[int32]map[int32]context.CancelFunc)}
+	return &activeAttempts{
+		byConversation: make(map[int32]map[int32]context.CancelCauseFunc),
+		deleting:       make(map[int32]struct{}),
+	}
 }
 
-func (a *activeAttempts) register(conversationID, attemptID int32, cancel context.CancelFunc) {
+// register tracks an in-flight attempt. It returns false when the
+// conversation is already being deleted, closing the race where a send
+// registers after deletion cancelled the active attempts.
+func (a *activeAttempts) register(conversationID, attemptID int32, cancel context.CancelCauseFunc) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if _, ok := a.deleting[conversationID]; ok {
+		return false
+	}
 	if a.byConversation[conversationID] == nil {
-		a.byConversation[conversationID] = make(map[int32]context.CancelFunc)
+		a.byConversation[conversationID] = make(map[int32]context.CancelCauseFunc)
 	}
 	a.byConversation[conversationID][attemptID] = cancel
+	return true
 }
 
 func (a *activeAttempts) unregister(conversationID, attemptID int32) {
@@ -163,13 +178,23 @@ func (a *activeAttempts) unregister(conversationID, attemptID int32) {
 	}
 }
 
-// cancelAll cancels every in-flight attempt of a conversation.
+// cancelAll cancels every in-flight attempt of a conversation and tombstones
+// it so further registrations are refused: the conversation is being deleted.
 func (a *activeAttempts) cancelAll(conversationID int32) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	a.deleting[conversationID] = struct{}{}
 	for _, cancel := range a.byConversation[conversationID] {
-		cancel()
+		cancel(errAttemptCancelled)
 	}
+}
+
+// restore lifts the deletion tombstone when the store delete failed, so the
+// surviving conversation accepts sends again.
+func (a *activeAttempts) restore(conversationID int32) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	delete(a.deleting, conversationID)
 }
 
 func convertConversation(stored *store.AIConversation) *Conversation {

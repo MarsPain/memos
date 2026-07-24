@@ -531,12 +531,11 @@ func (s *ConnectServiceHandler) Transcribe(ctx context.Context, req *connect.Req
 	return connect.NewResponse(resp), nil
 }
 
-func (s *ConnectServiceHandler) SendChatMessage(ctx context.Context, req *connect.Request[v1pb.SendChatMessageRequest]) (*connect.Response[v1pb.SendChatMessageResponse], error) {
-	resp, err := s.APIV1Service.SendChatMessage(ctx, req.Msg)
-	if err != nil {
-		return nil, convertGRPCError(err)
+func (s *ConnectServiceHandler) SendChatMessage(ctx context.Context, req *connect.Request[v1pb.SendChatMessageRequest], stream *connect.ServerStream[v1pb.SendChatMessageEvent]) error {
+	if err := s.APIV1Service.streamChatMessage(ctx, req.Msg, stream.Send); err != nil {
+		return convertGRPCError(err)
 	}
-	return connect.NewResponse(resp), nil
+	return nil
 }
 
 func (s *ConnectServiceHandler) CreateChatConversation(ctx context.Context, req *connect.Request[v1pb.CreateChatConversationRequest]) (*connect.Response[v1pb.ChatConversation], error) {

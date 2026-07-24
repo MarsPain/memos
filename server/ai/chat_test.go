@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -29,6 +30,10 @@ type chatTestFixture struct {
 }
 
 func newChatTestFixture(ctx context.Context, t *testing.T, model internalai.Model, factoryErr error) *chatTestFixture {
+	return newChatTestFixtureWithLimits(ctx, t, model, factoryErr, serverai.DefaultLimits())
+}
+
+func newChatTestFixtureWithLimits(ctx context.Context, t *testing.T, model internalai.Model, factoryErr error, limits serverai.Limits) *chatTestFixture {
 	st := teststore.NewTestingStore(ctx, t)
 	t.Cleanup(func() { _ = st.Close() })
 	fake, _ := model.(*aitest.Model)
@@ -40,7 +45,7 @@ func newChatTestFixture(ctx context.Context, t *testing.T, model internalai.Mode
 			return model, nil
 		}
 	}
-	service := serverai.NewService(st, memo.NewService(st), factory)
+	service := serverai.NewServiceWithLimits(st, memo.NewService(st), factory, limits)
 	return &chatTestFixture{service: service, store: st, model: fake, factory: factory}
 }
 
@@ -87,6 +92,62 @@ func (f *chatTestFixture) getMessages(ctx context.Context, t *testing.T, user *s
 	return messages
 }
 
+// getStoredMessages reads the raw stored messages of a conversation so tests
+// can assert on persisted payloads such as the normalized error category.
+func (f *chatTestFixture) getStoredMessages(ctx context.Context, t *testing.T, user *store.User, uid string) []*store.AIMessage {
+	t.Helper()
+	conversation, err := f.store.GetAIConversation(ctx, &store.FindAIConversation{UID: &uid, UserID: &user.ID})
+	require.NoError(t, err)
+	require.NotNil(t, conversation)
+	messages, err := f.store.ListAIMessages(ctx, &store.FindAIMessage{ConversationID: &conversation.ID})
+	require.NoError(t, err)
+	return messages
+}
+
+// streamCollector gathers emitted stream events.
+type streamCollector struct {
+	events []serverai.StreamEvent
+}
+
+func (c *streamCollector) emit(event serverai.StreamEvent) error {
+	c.events = append(c.events, event)
+	return nil
+}
+
+// send runs a streaming send and returns the collected events.
+func (f *chatTestFixture) send(ctx context.Context, user *store.User, conversationUID, content, requestID string) (*streamCollector, error) {
+	collector := &streamCollector{}
+	err := f.service.SendMessageStream(ctx, user, conversationUID, content, requestID, collector.emit)
+	return collector, err
+}
+
+// requireCompleteEvent extracts the terminal complete event, requiring the
+// event sequence to be start, zero or more deltas, then complete.
+func requireCompleteEvent(t *testing.T, collector *streamCollector) serverai.Message {
+	t.Helper()
+	require.NotEmpty(t, collector.events)
+	require.NotNil(t, collector.events[0].Start)
+	last := collector.events[len(collector.events)-1]
+	require.NotNil(t, last.Complete)
+	for _, event := range collector.events[1 : len(collector.events)-1] {
+		require.Nil(t, event.Start)
+		require.Nil(t, event.Complete)
+		require.NotEmpty(t, event.Delta)
+	}
+	return *last.Complete
+}
+
+// requireDeltas concatenates the delta payloads of a collected stream.
+func requireDeltas(t *testing.T, collector *streamCollector) string {
+	t.Helper()
+	require.NotEmpty(t, collector.events)
+	deltas := ""
+	for _, event := range collector.events[1 : len(collector.events)-1] {
+		deltas += event.Delta
+	}
+	return deltas
+}
+
 func TestGenerationAvailable(t *testing.T) {
 	ctx := context.Background()
 
@@ -128,7 +189,7 @@ func TestSendMessageValidation(t *testing.T) {
 		user := fixture.createUser(ctx, t, "alice")
 		conversation := fixture.createConversation(ctx, t, user, "")
 
-		_, _, err := fixture.service.SendMessage(ctx, user, conversation.UID, "hello", "req-1")
+		_, err := fixture.send(ctx, user, conversation.UID, "hello", "req-1")
 		require.Equal(t, codes.FailedPrecondition, status.Code(err))
 		// Nothing is persisted when generation is unavailable.
 		require.Empty(t, fixture.getMessages(ctx, t, user, conversation.UID))
@@ -140,7 +201,7 @@ func TestSendMessageValidation(t *testing.T) {
 		user := fixture.createUser(ctx, t, "alice")
 		conversation := fixture.createConversation(ctx, t, user, "")
 
-		_, _, err := fixture.service.SendMessage(ctx, user, conversation.UID, "   ", "req-1")
+		_, err := fixture.send(ctx, user, conversation.UID, "   ", "req-1")
 		require.Equal(t, codes.InvalidArgument, status.Code(err))
 	})
 
@@ -150,7 +211,7 @@ func TestSendMessageValidation(t *testing.T) {
 		user := fixture.createUser(ctx, t, "alice")
 		conversation := fixture.createConversation(ctx, t, user, "")
 
-		_, _, err := fixture.service.SendMessage(ctx, user, conversation.UID, "hello", " ")
+		_, err := fixture.send(ctx, user, conversation.UID, "hello", " ")
 		require.Equal(t, codes.InvalidArgument, status.Code(err))
 	})
 
@@ -159,7 +220,7 @@ func TestSendMessageValidation(t *testing.T) {
 		fixture.configureGeneration(ctx, t)
 		user := fixture.createUser(ctx, t, "alice")
 
-		_, _, err := fixture.service.SendMessage(ctx, user, "missing", "hello", "req-1")
+		_, err := fixture.send(ctx, user, "missing", "hello", "req-1")
 		require.Equal(t, codes.NotFound, status.Code(err))
 	})
 
@@ -167,17 +228,17 @@ func TestSendMessageValidation(t *testing.T) {
 		fixture := newChatTestFixture(ctx, t, &aitest.Model{}, nil)
 		fixture.configureGeneration(ctx, t)
 
-		_, _, err := fixture.service.SendMessage(ctx, nil, "any", "hello", "req-1")
+		_, err := fixture.send(ctx, nil, "any", "hello", "req-1")
 		require.Equal(t, codes.Unauthenticated, status.Code(err))
 	})
 }
 
-func TestSendMessageGroundedAnswer(t *testing.T) {
+func TestSendMessageStreamsGroundedAnswer(t *testing.T) {
 	ctx := context.Background()
 	fixture := newChatTestFixture(ctx, t, &aitest.Model{
-		GenerateResponse: internalai.GenerationResponse{
-			Content: "Alpine lakes are great for hiking.",
-			Usage:   internalai.Usage{InputTokens: 10, OutputTokens: 8, TotalTokens: 18},
+		StreamEvents: []internalai.StreamEvent{
+			{Delta: "Alpine lakes "},
+			{Delta: "are great for hiking.", Usage: &internalai.Usage{InputTokens: 10, OutputTokens: 8, TotalTokens: 18}},
 		},
 	}, nil)
 	fixture.configureGeneration(ctx, t)
@@ -190,25 +251,33 @@ func TestSendMessageGroundedAnswer(t *testing.T) {
 	fixture.createMemo(ctx, t, bob.ID, "bob-hiking", "Bob's secret hiking spots.", store.Private)
 
 	conversation := fixture.createConversation(ctx, t, alice, "")
-	userMsg, assistantMsg, err := fixture.service.SendMessage(ctx, alice, conversation.UID, "Where should I go hiking", "req-1")
+	collector, err := fixture.send(ctx, alice, conversation.UID, "Where should I go hiking", "req-1")
 	require.NoError(t, err)
-	require.Equal(t, serverai.RoleUser, userMsg.Role)
-	require.Equal(t, serverai.StatusComplete, userMsg.Status)
-	require.Equal(t, "Where should I go hiking", userMsg.Content)
-	require.Equal(t, "req-1", userMsg.ClientRequestID)
-	require.Equal(t, serverai.RoleAssistant, assistantMsg.Role)
-	require.Equal(t, serverai.StatusComplete, assistantMsg.Status)
-	require.Equal(t, int32(1), assistantMsg.Attempt)
-	require.Equal(t, "Alpine lakes are great for hiking.", assistantMsg.Content)
 
-	require.Len(t, assistantMsg.Citations, 1)
-	require.Equal(t, aliceMemo.UID, assistantMsg.Citations[0].MemoUID)
-	require.NotEmpty(t, assistantMsg.Citations[0].Snippet)
+	// The stream starts with the persisted pair before any delta.
+	start := collector.events[0].Start
+	require.Equal(t, serverai.RoleUser, start.UserMessage.Role)
+	require.Equal(t, serverai.StatusComplete, start.UserMessage.Status)
+	require.Equal(t, "Where should I go hiking", start.UserMessage.Content)
+	require.Equal(t, "req-1", start.UserMessage.ClientRequestID)
+	require.Equal(t, serverai.RoleAssistant, start.AssistantMessage.Role)
+	require.Equal(t, serverai.StatusStreaming, start.AssistantMessage.Status)
+	require.Equal(t, int32(1), start.AssistantMessage.Attempt)
+
+	// Deltas stream incrementally and the terminal event is the authoritative
+	// stored attempt whose content is exactly the concatenated deltas.
+	require.Equal(t, "Alpine lakes are great for hiking.", requireDeltas(t, collector))
+	complete := requireCompleteEvent(t, collector)
+	require.Equal(t, serverai.StatusComplete, complete.Status)
+	require.Equal(t, "Alpine lakes are great for hiking.", complete.Content)
+	require.Len(t, complete.Citations, 1)
+	require.Equal(t, aliceMemo.UID, complete.Citations[0].MemoUID)
+	require.NotEmpty(t, complete.Citations[0].Snippet)
 
 	// The generation request carries instructions plus the question and the
 	// quoted memo context.
-	require.Len(t, fixture.model.GenerationRequests, 1)
-	request := fixture.model.GenerationRequests[0]
+	require.Len(t, fixture.model.StreamRequests, 1)
+	request := fixture.model.StreamRequests[0]
 	require.Equal(t, "chat-model", request.Model)
 	require.Len(t, request.Messages, 2)
 	require.Equal(t, internalai.RoleSystem, request.Messages[0].Role)
@@ -217,34 +286,37 @@ func TestSendMessageGroundedAnswer(t *testing.T) {
 	require.Contains(t, request.Messages[1].Content, "<memo name=\"memos/"+aliceMemo.UID+"\">")
 	require.NotContains(t, request.Messages[1].Content, "bob-hiking")
 
-	// Both messages are persisted with their terminal states, and the
-	// conversation title comes from the first user message.
+	// Both messages are persisted with their terminal states, usage is
+	// recorded, and the conversation title comes from the first user message.
 	messages := fixture.getMessages(ctx, t, alice, conversation.UID)
 	require.Len(t, messages, 2)
 	require.Equal(t, serverai.RoleUser, messages[0].Role)
 	require.Equal(t, serverai.RoleAssistant, messages[1].Role)
-	stored, err := fixture.store.GetAIConversation(ctx, &store.FindAIConversation{UID: &conversation.UID})
+	stored := fixture.getStoredMessages(ctx, t, alice, conversation.UID)
+	require.Equal(t, int32(18), stored[1].Payload.GetTotalTokens())
+	storedConversation, err := fixture.store.GetAIConversation(ctx, &store.FindAIConversation{UID: &conversation.UID})
 	require.NoError(t, err)
-	require.Equal(t, "Where should I go hiking", stored.Title)
+	require.Equal(t, "Where should I go hiking", storedConversation.Title)
 }
 
 func TestSendMessageWithoutMatchingMemos(t *testing.T) {
 	ctx := context.Background()
 	fixture := newChatTestFixture(ctx, t, &aitest.Model{
-		GenerateResponse: internalai.GenerationResponse{Content: "I don't know."},
+		StreamEvents: []internalai.StreamEvent{{Delta: "I don't know."}},
 	}, nil)
 	fixture.configureGeneration(ctx, t)
 	alice := fixture.createUser(ctx, t, "alice")
 	fixture.createMemo(ctx, t, alice.ID, "alice-cooking", "Risotto recipe notes.", store.Public)
 	conversation := fixture.createConversation(ctx, t, alice, "")
 
-	_, assistantMsg, err := fixture.service.SendMessage(ctx, alice, conversation.UID, "What is the capital of France?", "req-1")
+	collector, err := fixture.send(ctx, alice, conversation.UID, "What is the capital of France?", "req-1")
 	require.NoError(t, err)
-	require.Empty(t, assistantMsg.Citations)
-	require.NotContains(t, fixture.model.GenerationRequests[0].Messages[1].Content, "<memo name=")
+	complete := requireCompleteEvent(t, collector)
+	require.Empty(t, complete.Citations)
+	require.NotContains(t, fixture.model.StreamRequests[0].Messages[1].Content, "<memo name=")
 }
 
-func TestSendMessageFactoryAndGenerateErrors(t *testing.T) {
+func TestSendMessageFactoryAndStreamErrors(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("factory error maps to failed precondition", func(t *testing.T) {
@@ -252,89 +324,153 @@ func TestSendMessageFactoryAndGenerateErrors(t *testing.T) {
 		fixture.configureGeneration(ctx, t)
 		user := fixture.createUser(ctx, t, "alice")
 		conversation := fixture.createConversation(ctx, t, user, "")
-		_, _, err := fixture.service.SendMessage(ctx, user, conversation.UID, "hello", "req-1")
+		_, err := fixture.send(ctx, user, conversation.UID, "hello", "req-1")
 		require.Equal(t, codes.FailedPrecondition, status.Code(err))
 	})
 
-	t.Run("generate error persists a failed attempt", func(t *testing.T) {
-		fixture := newChatTestFixture(ctx, t, &aitest.Model{GenerateError: errors.New("provider unavailable")}, nil)
+	t.Run("stream error persists a failed attempt with the normalized category", func(t *testing.T) {
+		fixture := newChatTestFixture(ctx, t, &aitest.Model{
+			StreamError: internalai.NewProviderError(internalai.ErrorRateLimit, "AI provider rate limit exceeded", nil),
+		}, nil)
 		fixture.configureGeneration(ctx, t)
 		user := fixture.createUser(ctx, t, "alice")
 		conversation := fixture.createConversation(ctx, t, user, "")
 
-		_, _, err := fixture.service.SendMessage(ctx, user, conversation.UID, "hello", "req-1")
-		require.Equal(t, codes.Internal, status.Code(err))
+		collector, err := fixture.send(ctx, user, conversation.UID, "hello", "req-1")
+		require.NoError(t, err)
+		complete := requireCompleteEvent(t, collector)
+		require.Equal(t, serverai.StatusFailed, complete.Status)
+		require.Empty(t, complete.Content)
 
-		messages := fixture.getMessages(ctx, t, user, conversation.UID)
-		require.Len(t, messages, 2)
-		require.Equal(t, serverai.StatusComplete, messages[0].Status)
-		require.Equal(t, serverai.StatusFailed, messages[1].Status)
-		require.Empty(t, messages[1].Content)
+		stored := fixture.getStoredMessages(ctx, t, user, conversation.UID)
+		require.Len(t, stored, 2)
+		require.Equal(t, store.AIMessageStatusFailed, stored[1].Status)
+		require.Equal(t, "rate_limit", stored[1].Payload.GetError())
+	})
+
+	t.Run("mid-stream error discards the partial answer", func(t *testing.T) {
+		fixture := newChatTestFixture(ctx, t, &aitest.Model{
+			StreamEvents: []internalai.StreamEvent{
+				{Delta: "partial"},
+				{Err: internalai.NewProviderError(internalai.ErrorUnavailable, "AI provider is unavailable", nil)},
+			},
+		}, nil)
+		fixture.configureGeneration(ctx, t)
+		user := fixture.createUser(ctx, t, "alice")
+		conversation := fixture.createConversation(ctx, t, user, "")
+
+		collector, err := fixture.send(ctx, user, conversation.UID, "hello", "req-1")
+		require.NoError(t, err)
+		require.Equal(t, "partial", requireDeltas(t, collector))
+		complete := requireCompleteEvent(t, collector)
+		require.Equal(t, serverai.StatusFailed, complete.Status)
+
+		stored := fixture.getStoredMessages(ctx, t, user, conversation.UID)
+		require.Empty(t, stored[1].Content)
+		require.Equal(t, "unavailable", stored[1].Payload.GetError())
 	})
 
 	t.Run("empty answer persists a failed attempt", func(t *testing.T) {
-		fixture := newChatTestFixture(ctx, t, &aitest.Model{GenerateResponse: internalai.GenerationResponse{Content: "  "}}, nil)
+		fixture := newChatTestFixture(ctx, t, &aitest.Model{
+			StreamEvents: []internalai.StreamEvent{{Delta: "  "}},
+		}, nil)
 		fixture.configureGeneration(ctx, t)
 		user := fixture.createUser(ctx, t, "alice")
 		conversation := fixture.createConversation(ctx, t, user, "")
 
-		_, _, err := fixture.service.SendMessage(ctx, user, conversation.UID, "hello", "req-1")
-		require.Equal(t, codes.Internal, status.Code(err))
-
-		messages := fixture.getMessages(ctx, t, user, conversation.UID)
-		require.Len(t, messages, 2)
-		require.Equal(t, serverai.StatusFailed, messages[1].Status)
+		collector, err := fixture.send(ctx, user, conversation.UID, "hello", "req-1")
+		require.NoError(t, err)
+		complete := requireCompleteEvent(t, collector)
+		require.Equal(t, serverai.StatusFailed, complete.Status)
 	})
 }
 
 func TestSendMessageDuplicateRequestID(t *testing.T) {
 	ctx := context.Background()
 	fixture := newChatTestFixture(ctx, t, &aitest.Model{
-		GenerateResponse: internalai.GenerationResponse{Content: "answer"},
+		StreamEvents: []internalai.StreamEvent{{Delta: "answer"}},
 	}, nil)
 	fixture.configureGeneration(ctx, t)
 	alice := fixture.createUser(ctx, t, "alice")
 	conversation := fixture.createConversation(ctx, t, alice, "")
 
-	userMsg, assistantMsg, err := fixture.service.SendMessage(ctx, alice, conversation.UID, "question", "req-1")
+	collector, err := fixture.send(ctx, alice, conversation.UID, "question", "req-1")
 	require.NoError(t, err)
+	requireCompleteEvent(t, collector)
 
-	// A repeated request ID returns the existing pair without regenerating.
-	duplicateUserMsg, duplicateAssistantMsg, err := fixture.service.SendMessage(ctx, alice, conversation.UID, "question", "req-1")
+	// A repeated request ID replays the stored pair without regenerating.
+	duplicate, err := fixture.send(ctx, alice, conversation.UID, "question", "req-1")
 	require.NoError(t, err)
-	require.Equal(t, userMsg.Content, duplicateUserMsg.Content)
-	require.Equal(t, assistantMsg.Content, duplicateAssistantMsg.Content)
-	require.Len(t, fixture.model.GenerationRequests, 1)
+	require.Len(t, duplicate.events, 2)
+	require.NotNil(t, duplicate.events[0].Start)
+	complete := requireCompleteEvent(t, duplicate)
+	require.Equal(t, "answer", complete.Content)
+	require.Equal(t, serverai.StatusComplete, complete.Status)
+	require.Len(t, fixture.model.StreamRequests, 1)
 
 	messages := fixture.getMessages(ctx, t, alice, conversation.UID)
 	require.Len(t, messages, 2)
 
 	// A different request ID on the same conversation is a new message.
-	_, _, err = fixture.service.SendMessage(ctx, alice, conversation.UID, "question", "req-2")
+	_, err = fixture.send(ctx, alice, conversation.UID, "question", "req-2")
 	require.NoError(t, err)
 	require.Len(t, fixture.getMessages(ctx, t, alice, conversation.UID), 4)
 }
 
-func TestSendMessageRetryAfterFailure(t *testing.T) {
+func TestSendMessageDuplicateWhileActive(t *testing.T) {
 	ctx := context.Background()
-	fixture := newChatTestFixture(ctx, t, &aitest.Model{GenerateError: errors.New("provider down")}, nil)
+	model := &blockingStreamModel{started: make(chan struct{})}
+	fixture := newChatTestFixture(ctx, t, model, nil)
 	fixture.configureGeneration(ctx, t)
 	alice := fixture.createUser(ctx, t, "alice")
 	conversation := fixture.createConversation(ctx, t, alice, "")
 
-	_, _, err := fixture.service.SendMessage(ctx, alice, conversation.UID, "question", "req-1")
-	require.Equal(t, codes.Internal, status.Code(err))
+	sendCtx, cancelSend := context.WithCancel(ctx)
+	t.Cleanup(cancelSend)
+	sendErr := make(chan error, 1)
+	go func() {
+		_, err := fixture.send(sendCtx, alice, conversation.UID, "question", "req-1")
+		sendErr <- err
+	}()
+	<-model.started
 
-	// Retrying with the same request ID creates a new attempt on the same
-	// user message instead of duplicating it.
-	fixture.model.GenerateError = nil
-	fixture.model.GenerateResponse = internalai.GenerationResponse{Content: "recovered"}
-	userMsg, assistantMsg, err := fixture.service.SendMessage(ctx, alice, conversation.UID, "question", "req-1")
+	// A repeated request ID while the attempt is still generating replays the
+	// stored pair only; the stored state stays authoritative.
+	duplicate, err := fixture.send(ctx, alice, conversation.UID, "question", "req-1")
 	require.NoError(t, err)
-	require.Equal(t, "question", userMsg.Content)
-	require.Equal(t, int32(2), assistantMsg.Attempt)
-	require.Equal(t, serverai.StatusComplete, assistantMsg.Status)
-	require.Equal(t, "recovered", assistantMsg.Content)
+	require.Len(t, duplicate.events, 1)
+	start := duplicate.events[0].Start
+	require.NotNil(t, start)
+	require.Equal(t, "question", start.UserMessage.Content)
+	require.Equal(t, serverai.StatusStreaming, start.AssistantMessage.Status)
+	require.Equal(t, 1, model.StreamRequestCount())
+
+	cancelSend()
+	require.Equal(t, codes.Canceled, status.Code(<-sendErr))
+}
+
+func TestSendMessageRetryAfterFailure(t *testing.T) {
+	ctx := context.Background()
+	fixture := newChatTestFixture(ctx, t, &aitest.Model{StreamError: errors.New("provider down")}, nil)
+	fixture.configureGeneration(ctx, t)
+	alice := fixture.createUser(ctx, t, "alice")
+	conversation := fixture.createConversation(ctx, t, alice, "")
+
+	_, err := fixture.send(ctx, alice, conversation.UID, "question", "req-1")
+	require.NoError(t, err)
+
+	// Retrying with the same request ID streams a new attempt on the same
+	// user message instead of duplicating it.
+	fixture.model.StreamError = nil
+	fixture.model.StreamEvents = []internalai.StreamEvent{{Delta: "recovered"}}
+	collector, err := fixture.send(ctx, alice, conversation.UID, "question", "req-1")
+	require.NoError(t, err)
+	start := collector.events[0].Start
+	require.Equal(t, "question", start.UserMessage.Content)
+	require.Equal(t, int32(2), start.AssistantMessage.Attempt)
+	complete := requireCompleteEvent(t, collector)
+	require.Equal(t, serverai.StatusComplete, complete.Status)
+	require.Equal(t, "recovered", complete.Content)
 
 	messages := fixture.getMessages(ctx, t, alice, conversation.UID)
 	require.Len(t, messages, 3)
@@ -345,22 +481,52 @@ func TestSendMessageRetryAfterFailure(t *testing.T) {
 	require.Equal(t, serverai.StatusComplete, messages[2].Status)
 }
 
-// blockingModel blocks in Generate until its context is cancelled.
-type blockingModel struct {
+// blockingStreamModel blocks in Stream until its context is cancelled, then
+// reports the context error as the terminal stream event. Setting
+// staticEvents switches it to replaying those events like aitest.Model.
+type blockingStreamModel struct {
 	aitest.Model
 	started chan struct{}
 	once    sync.Once
+
+	mu           sync.Mutex
+	streamCalls  int
+	staticEvents []internalai.StreamEvent
 }
 
-func (m *blockingModel) Generate(ctx context.Context, _ internalai.GenerationRequest) (internalai.GenerationResponse, error) {
+func (m *blockingStreamModel) Stream(ctx context.Context, _ internalai.GenerationRequest) (<-chan internalai.StreamEvent, error) {
 	m.once.Do(func() { close(m.started) })
-	<-ctx.Done()
-	return internalai.GenerationResponse{}, ctx.Err()
+	m.mu.Lock()
+	m.streamCalls++
+	static := m.staticEvents
+	m.mu.Unlock()
+	if static != nil {
+		stream := make(chan internalai.StreamEvent, len(static))
+		for _, event := range static {
+			stream <- event
+		}
+		close(stream)
+		return stream, nil
+	}
+	stream := make(chan internalai.StreamEvent, 1)
+	go func() {
+		<-ctx.Done()
+		stream <- internalai.StreamEvent{Err: ctx.Err()}
+		close(stream)
+	}()
+	return stream, nil
+}
+
+// StreamRequestCount returns how many Stream calls the blocking fake served.
+func (m *blockingStreamModel) StreamRequestCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.streamCalls
 }
 
 func TestSendMessageCancelledByCaller(t *testing.T) {
 	ctx := context.Background()
-	model := &blockingModel{started: make(chan struct{})}
+	model := &blockingStreamModel{started: make(chan struct{})}
 	fixture := newChatTestFixture(ctx, t, model, nil)
 	fixture.configureGeneration(ctx, t)
 	alice := fixture.createUser(ctx, t, "alice")
@@ -369,7 +535,7 @@ func TestSendMessageCancelledByCaller(t *testing.T) {
 	sendCtx, cancelSend := context.WithCancel(ctx)
 	sendErr := make(chan error, 1)
 	go func() {
-		_, _, err := fixture.service.SendMessage(sendCtx, alice, conversation.UID, "hello", "req-1")
+		_, err := fixture.send(sendCtx, alice, conversation.UID, "hello", "req-1")
 		sendErr <- err
 	}()
 	<-model.started
@@ -380,11 +546,186 @@ func TestSendMessageCancelledByCaller(t *testing.T) {
 	messages := fixture.getMessages(ctx, t, alice, conversation.UID)
 	require.Len(t, messages, 2)
 	require.Equal(t, serverai.StatusCancelled, messages[1].Status)
+	stored := fixture.getStoredMessages(ctx, t, alice, conversation.UID)
+	require.Equal(t, "cancelled", stored[1].Payload.GetError())
+}
+
+func TestSendMessageDisconnectDuringDeltas(t *testing.T) {
+	ctx := context.Background()
+	fixture := newChatTestFixture(ctx, t, &aitest.Model{
+		StreamEvents: []internalai.StreamEvent{{Delta: "first"}, {Delta: "second"}},
+	}, nil)
+	fixture.configureGeneration(ctx, t)
+	alice := fixture.createUser(ctx, t, "alice")
+	conversation := fixture.createConversation(ctx, t, alice, "")
+
+	// The client goes away when the first delta arrives.
+	emitErr := errors.New("client disconnected")
+	failOnDelta := func(event serverai.StreamEvent) error {
+		if event.Delta != "" {
+			return emitErr
+		}
+		return nil
+	}
+	err := fixture.service.SendMessageStream(ctx, alice, conversation.UID, "hello", "req-1", failOnDelta)
+	require.ErrorIs(t, err, emitErr)
+
+	// The disconnect propagates to the provider and is persisted as CANCELLED.
+	messages := fixture.getMessages(ctx, t, alice, conversation.UID)
+	require.Len(t, messages, 2)
+	require.Equal(t, serverai.StatusCancelled, messages[1].Status)
+}
+
+func TestReconnectReadsStoredStateAfterDisconnect(t *testing.T) {
+	ctx := context.Background()
+	model := &blockingStreamModel{started: make(chan struct{})}
+	fixture := newChatTestFixture(ctx, t, model, nil)
+	fixture.configureGeneration(ctx, t)
+	alice := fixture.createUser(ctx, t, "alice")
+	conversation := fixture.createConversation(ctx, t, alice, "")
+
+	// The client disconnects mid-generation.
+	sendCtx, cancelSend := context.WithCancel(ctx)
+	sendErr := make(chan error, 1)
+	go func() {
+		_, err := fixture.send(sendCtx, alice, conversation.UID, "question", "req-1")
+		sendErr <- err
+	}()
+	<-model.started
+	cancelSend()
+	require.Equal(t, codes.Canceled, status.Code(<-sendErr))
+
+	// A reconnecting client reads the authoritative stored state: the attempt
+	// is CANCELLED, not assumed from the broken stream.
+	messages := fixture.getMessages(ctx, t, alice, conversation.UID)
+	require.Len(t, messages, 2)
+	require.Equal(t, serverai.StatusCancelled, messages[1].Status)
+
+	// Retrying the same request ID streams a fresh attempt on the stored user
+	// message instead of duplicating it.
+	model.mu.Lock()
+	model.staticEvents = []internalai.StreamEvent{{Delta: "recovered"}}
+	model.mu.Unlock()
+	collector, err := fixture.send(ctx, alice, conversation.UID, "question", "req-1")
+	require.NoError(t, err)
+	complete := requireCompleteEvent(t, collector)
+	require.Equal(t, int32(2), complete.Attempt)
+	require.Equal(t, serverai.StatusComplete, complete.Status)
+	require.Equal(t, "recovered", complete.Content)
+
+	messages = fixture.getMessages(ctx, t, alice, conversation.UID)
+	require.Len(t, messages, 3)
+}
+
+func TestSendMessageAttemptTimeout(t *testing.T) {
+	ctx := context.Background()
+	model := &blockingStreamModel{started: make(chan struct{})}
+	limits := serverai.DefaultLimits()
+	limits.AttemptTimeout = 50 * time.Millisecond
+	fixture := newChatTestFixtureWithLimits(ctx, t, model, nil, limits)
+	fixture.configureGeneration(ctx, t)
+	alice := fixture.createUser(ctx, t, "alice")
+	conversation := fixture.createConversation(ctx, t, alice, "")
+
+	collector, err := fixture.send(ctx, alice, conversation.UID, "hello", "req-1")
+	require.NoError(t, err)
+	complete := requireCompleteEvent(t, collector)
+	require.Equal(t, serverai.StatusFailed, complete.Status)
+
+	// The attempt deadline persists FAILED with the timeout category.
+	stored := fixture.getStoredMessages(ctx, t, alice, conversation.UID)
+	require.Len(t, stored, 2)
+	require.Equal(t, store.AIMessageStatusFailed, stored[1].Status)
+	require.Equal(t, "timeout", stored[1].Payload.GetError())
+}
+
+func TestSendMessageRateLimited(t *testing.T) {
+	ctx := context.Background()
+	fixture := newChatTestFixtureWithLimits(ctx, t, &aitest.Model{
+		StreamEvents: []internalai.StreamEvent{{Delta: "answer"}},
+	}, nil, serverai.Limits{
+		MaxConcurrentAttempts: 8,
+		AttemptTimeout:        time.Minute,
+		MaxAnswerRunes:        1024,
+		SendRateBurst:         1,
+		SendRateInterval:      time.Hour,
+	})
+	fixture.configureGeneration(ctx, t)
+	alice := fixture.createUser(ctx, t, "alice")
+	conversation := fixture.createConversation(ctx, t, alice, "")
+
+	_, err := fixture.send(ctx, alice, conversation.UID, "first", "req-1")
+	require.NoError(t, err)
+
+	// The burst is exhausted: the next send is rejected before persisting.
+	_, err = fixture.send(ctx, alice, conversation.UID, "second", "req-2")
+	require.Equal(t, codes.ResourceExhausted, status.Code(err))
+	require.Len(t, fixture.getMessages(ctx, t, alice, conversation.UID), 2)
+}
+
+func TestSendMessageConcurrencyLimited(t *testing.T) {
+	ctx := context.Background()
+	model := &blockingStreamModel{started: make(chan struct{})}
+	fixture := newChatTestFixtureWithLimits(ctx, t, model, nil, serverai.Limits{
+		MaxConcurrentAttempts: 1,
+		AttemptTimeout:        time.Minute,
+		MaxAnswerRunes:        1024,
+		SendRateBurst:         10,
+		SendRateInterval:      time.Second,
+	})
+	fixture.configureGeneration(ctx, t)
+	alice := fixture.createUser(ctx, t, "alice")
+	conversation := fixture.createConversation(ctx, t, alice, "")
+
+	sendCtx, cancelSend := context.WithCancel(ctx)
+	t.Cleanup(cancelSend)
+	sendErr := make(chan error, 1)
+	go func() {
+		_, err := fixture.send(sendCtx, alice, conversation.UID, "first", "req-1")
+		sendErr <- err
+	}()
+	<-model.started
+
+	// The single in-flight permit is held: a second send is rejected before
+	// persisting anything.
+	_, err := fixture.send(ctx, alice, conversation.UID, "second", "req-2")
+	require.Equal(t, codes.ResourceExhausted, status.Code(err))
+	require.Len(t, fixture.getMessages(ctx, t, alice, conversation.UID), 2)
+
+	cancelSend()
+	require.Equal(t, codes.Canceled, status.Code(<-sendErr))
+}
+
+func TestSendMessageResponseSizeLimited(t *testing.T) {
+	ctx := context.Background()
+	fixture := newChatTestFixtureWithLimits(ctx, t, &aitest.Model{
+		StreamEvents: []internalai.StreamEvent{{Delta: "hello"}, {Delta: " world"}},
+	}, nil, serverai.Limits{
+		MaxConcurrentAttempts: 8,
+		AttemptTimeout:        time.Minute,
+		MaxAnswerRunes:        5,
+		SendRateBurst:         10,
+		SendRateInterval:      time.Second,
+	})
+	fixture.configureGeneration(ctx, t)
+	alice := fixture.createUser(ctx, t, "alice")
+	conversation := fixture.createConversation(ctx, t, alice, "")
+
+	collector, err := fixture.send(ctx, alice, conversation.UID, "hello", "req-1")
+	require.NoError(t, err)
+	complete := requireCompleteEvent(t, collector)
+	require.Equal(t, serverai.StatusFailed, complete.Status)
+
+	// The oversized answer is discarded and persisted as failed.
+	stored := fixture.getStoredMessages(ctx, t, alice, conversation.UID)
+	require.Len(t, stored, 2)
+	require.Empty(t, stored[1].Content)
+	require.Equal(t, "response_too_large", stored[1].Payload.GetError())
 }
 
 func TestDeleteConversationCancelsActiveAttempt(t *testing.T) {
 	ctx := context.Background()
-	model := &blockingModel{started: make(chan struct{})}
+	model := &blockingStreamModel{started: make(chan struct{})}
 	fixture := newChatTestFixture(ctx, t, model, nil)
 	fixture.configureGeneration(ctx, t)
 	alice := fixture.createUser(ctx, t, "alice")
@@ -392,7 +733,7 @@ func TestDeleteConversationCancelsActiveAttempt(t *testing.T) {
 
 	sendErr := make(chan error, 1)
 	go func() {
-		_, _, err := fixture.service.SendMessage(ctx, alice, conversation.UID, "hello", "req-1")
+		_, err := fixture.send(ctx, alice, conversation.UID, "hello", "req-1")
 		sendErr <- err
 	}()
 	<-model.started
@@ -407,13 +748,13 @@ func TestDeleteConversationCancelsActiveAttempt(t *testing.T) {
 func TestConversationSurvivesRestart(t *testing.T) {
 	ctx := context.Background()
 	fixture := newChatTestFixture(ctx, t, &aitest.Model{
-		GenerateResponse: internalai.GenerationResponse{Content: "answer"},
+		StreamEvents: []internalai.StreamEvent{{Delta: "answer"}},
 	}, nil)
 	fixture.configureGeneration(ctx, t)
 	alice := fixture.createUser(ctx, t, "alice")
 	conversation := fixture.createConversation(ctx, t, alice, "")
 
-	_, _, err := fixture.service.SendMessage(ctx, alice, conversation.UID, "first question", "req-1")
+	_, err := fixture.send(ctx, alice, conversation.UID, "first question", "req-1")
 	require.NoError(t, err)
 
 	// A fresh service instance over the same store (a restart) sees the
@@ -435,7 +776,7 @@ func TestConversationSurvivesRestart(t *testing.T) {
 func TestRestartReconcilesInterruptedAttempts(t *testing.T) {
 	ctx := context.Background()
 	fixture := newChatTestFixture(ctx, t, &aitest.Model{
-		GenerateResponse: internalai.GenerationResponse{Content: "recovered"},
+		StreamEvents: []internalai.StreamEvent{{Delta: "recovered"}},
 	}, nil)
 	fixture.configureGeneration(ctx, t)
 	alice := fixture.createUser(ctx, t, "alice")
@@ -469,16 +810,19 @@ func TestRestartReconcilesInterruptedAttempts(t *testing.T) {
 	require.Len(t, messages, 2)
 	require.Equal(t, serverai.StatusFailed, messages[1].Status)
 
-	_, assistantMsg, err := restarted.SendMessage(ctx, alice, conversation.UID, "question", "req-1")
+	collector := &streamCollector{}
+	err = restarted.SendMessageStream(ctx, alice, conversation.UID, "question", "req-1", collector.emit)
 	require.NoError(t, err)
-	require.Equal(t, int32(2), assistantMsg.Attempt)
-	require.Equal(t, "recovered", assistantMsg.Content)
+	start := collector.events[0].Start
+	require.Equal(t, int32(2), start.AssistantMessage.Attempt)
+	complete := requireCompleteEvent(t, collector)
+	require.Equal(t, "recovered", complete.Content)
 }
 
 func TestConversationsAreOwnerScoped(t *testing.T) {
 	ctx := context.Background()
 	fixture := newChatTestFixture(ctx, t, &aitest.Model{
-		GenerateResponse: internalai.GenerationResponse{Content: "answer"},
+		StreamEvents: []internalai.StreamEvent{{Delta: "answer"}},
 	}, nil)
 	fixture.configureGeneration(ctx, t)
 	alice := fixture.createUser(ctx, t, "alice")
@@ -488,7 +832,7 @@ func TestConversationsAreOwnerScoped(t *testing.T) {
 	// Bob has no read, send, or delete path to Alice's conversation.
 	_, _, err := fixture.service.GetConversation(ctx, bob, conversation.UID)
 	require.Equal(t, codes.NotFound, status.Code(err))
-	_, _, err = fixture.service.SendMessage(ctx, bob, conversation.UID, "hello", "req-1")
+	_, err = fixture.send(ctx, bob, conversation.UID, "hello", "req-1")
 	require.Equal(t, codes.NotFound, status.Code(err))
 	require.Equal(t, codes.NotFound, status.Code(fixture.service.DeleteConversation(ctx, bob, conversation.UID)))
 
@@ -500,15 +844,15 @@ func TestConversationsAreOwnerScoped(t *testing.T) {
 func TestConversationAccumulatesMessages(t *testing.T) {
 	ctx := context.Background()
 	fixture := newChatTestFixture(ctx, t, &aitest.Model{
-		GenerateResponse: internalai.GenerationResponse{Content: "answer"},
+		StreamEvents: []internalai.StreamEvent{{Delta: "answer"}},
 	}, nil)
 	fixture.configureGeneration(ctx, t)
 	alice := fixture.createUser(ctx, t, "alice")
 	conversation := fixture.createConversation(ctx, t, alice, "")
 
-	_, _, err := fixture.service.SendMessage(ctx, alice, conversation.UID, "first question", "req-1")
+	_, err := fixture.send(ctx, alice, conversation.UID, "first question", "req-1")
 	require.NoError(t, err)
-	_, _, err = fixture.service.SendMessage(ctx, alice, conversation.UID, "second question", "req-2")
+	_, err = fixture.send(ctx, alice, conversation.UID, "second question", "req-2")
 	require.NoError(t, err)
 
 	messages := fixture.getMessages(ctx, t, alice, conversation.UID)
