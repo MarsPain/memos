@@ -14,6 +14,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	apiv1 "github.com/usememos/memos/proto/gen/api/v1"
+	routerv1 "github.com/usememos/memos/server/router/api/v1"
 	"github.com/usememos/memos/store"
 )
 
@@ -729,4 +730,68 @@ func TestCreateMemoWithCustomTimestamps(t *testing.T) {
 	require.NotNil(t, memoWithoutTimestamps.CreateTime, "create_time should be auto-generated")
 	require.NotNil(t, memoWithoutTimestamps.UpdateTime, "update_time should be auto-generated")
 	require.True(t, time.Now().Unix()-memoWithoutTimestamps.CreateTime.AsTime().Unix() < 5, "create_time should be recent (within 5 seconds)")
+}
+
+func TestMemoWritesInvalidateSearchDocument(t *testing.T) {
+	ctx := context.Background()
+
+	ts := NewTestService(t)
+	defer ts.Cleanup()
+
+	user, err := ts.CreateRegularUser(ctx, "search-doc-user")
+	require.NoError(t, err)
+	userCtx := ts.CreateUserContext(ctx, user.ID)
+
+	searchService := ts.Service.SearchService()
+	getDocument := func(memoID int32) *store.AISearchDocument {
+		t.Helper()
+		document, err := ts.Store.GetAISearchDocument(ctx, &store.FindAISearchDocument{MemoID: &memoID})
+		require.NoError(t, err)
+		return document
+	}
+
+	// Create: the write emits a post-commit signal but never waits for the projection.
+	memoMessage, err := ts.Service.CreateMemo(userCtx, &apiv1.CreateMemoRequest{
+		Memo: &apiv1.Memo{
+			Content:    "# Searchable\n\nfirst content",
+			Visibility: apiv1.Visibility_PRIVATE,
+		},
+	})
+	require.NoError(t, err)
+	memoUID, err := routerv1.ExtractMemoUIDFromName(memoMessage.Name)
+	require.NoError(t, err)
+	memoRecord, err := ts.Store.GetMemo(ctx, &store.FindMemo{UID: &memoUID})
+	require.NoError(t, err)
+	require.NotNil(t, memoRecord)
+	require.Equal(t, 1, searchService.PendingInvalidations())
+	require.Nil(t, getDocument(memoRecord.ID), "the write path must not wait for the projection")
+
+	// After reconciliation the created memo has a search document.
+	searchService.RunOnce(ctx)
+	document := getDocument(memoRecord.ID)
+	require.NotNil(t, document)
+	require.Equal(t, "searchable", document.Title)
+	require.Equal(t, "searchable first content", document.Content)
+
+	// Update: reflected in the document after reconciliation.
+	_, err = ts.Service.UpdateMemo(userCtx, &apiv1.UpdateMemoRequest{
+		Memo: &apiv1.Memo{
+			Name:    memoMessage.Name,
+			Content: "second content",
+		},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"content"}},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, searchService.PendingInvalidations())
+	searchService.RunOnce(ctx)
+	document = getDocument(memoRecord.ID)
+	require.NotNil(t, document)
+	require.Equal(t, "second content", document.Content)
+
+	// Delete: the document is removed after reconciliation.
+	_, err = ts.Service.DeleteMemo(userCtx, &apiv1.DeleteMemoRequest{Name: memoMessage.Name})
+	require.NoError(t, err)
+	require.Equal(t, 1, searchService.PendingInvalidations())
+	searchService.RunOnce(ctx)
+	require.Nil(t, getDocument(memoRecord.ID))
 }

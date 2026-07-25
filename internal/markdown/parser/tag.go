@@ -77,7 +77,7 @@ func isValidTagRune(r rune) bool {
 //   - Maximum length: 100 runes (Unicode characters)
 //   - Stops at: whitespace, punctuation, or other invalid characters
 func (*tagParser) Parse(_ gast.Node, block text.Reader, _ parser.Context) gast.Node {
-	line, _ := block.PeekLine()
+	line, segment := block.PeekLine()
 
 	// Must start with #
 	if len(line) == 0 || line[0] != '#' {
@@ -141,9 +141,11 @@ func (*tagParser) Parse(_ gast.Node, block text.Reader, _ parser.Context) gast.N
 	// Advance reader
 	block.Advance(pos)
 
-	// Create node
+	// Create node. The tag starts at the segment start, where the reader was
+	// positioned when the # trigger dispatched this parser.
 	node := &mast.TagNode{
-		Tag: tagCopy,
+		Tag:     tagCopy,
+		Segment: text.NewSegment(segment.Start, segment.Start+pos),
 	}
 
 	return node

@@ -141,6 +141,10 @@ func (s *APIV1Service) CreateMemo(ctx context.Context, request *v1pb.CreateMemoR
 		s.dispatchMemoMentionNotificationsBestEffort(ctx, memo, nil, "")
 	}
 
+	// Signal that the memo's derived search document is stale. Emitted after
+	// the create commits; the write path never waits for the projection.
+	s.invalidateSearchDocument(memo.ID)
+
 	return memoMessage, nil
 }
 
@@ -467,6 +471,10 @@ func (s *APIV1Service) UpdateMemo(ctx context.Context, request *v1pb.UpdateMemoR
 	}
 	s.dispatchMemoUpdatedSideEffects(ctx, memo, parentMemo, memoMessage)
 
+	// Signal that the memo's derived search document is stale. This covers
+	// content edits as well as archive/restore transitions.
+	s.invalidateSearchDocument(memo.ID)
+
 	return memoMessage, nil
 }
 
@@ -543,6 +551,9 @@ func (s *APIV1Service) DeleteMemo(ctx context.Context, request *v1pb.DeleteMemoR
 		Visibility: memo.Visibility,
 		CreatorID:  resolveSSECreatorID(memo, nil),
 	})
+
+	// Signal that the memo's derived search document must be removed.
+	s.invalidateSearchDocument(memo.ID)
 
 	return &emptypb.Empty{}, nil
 }

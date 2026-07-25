@@ -97,6 +97,10 @@ func TestMigrationFromV0262PreservesLegacyData(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, memoShareExists, "memo_share table should be created")
 
+	aiSearchDocumentExists, err := tableExists(ctx, db, driver, "ai_search_document")
+	require.NoError(t, err)
+	require.True(t, aiSearchDocumentExists, "ai_search_document table should be created")
+
 	share, err := ts.CreateMemoShare(ctx, &store.MemoShare{
 		UID:       "post-upgrade-share",
 		MemoID:    101,

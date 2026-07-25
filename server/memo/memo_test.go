@@ -181,6 +181,106 @@ func TestListReadableMemos(t *testing.T) {
 	})
 }
 
+func TestListSearchableMemos(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("enumerates the corpus in ascending id order", func(t *testing.T) {
+		fixture := newMemoTestFixture(ctx, t)
+		first := fixture.createMemo(ctx, t, fixture.owner.ID, "first", store.Private)
+		second := fixture.createMemo(ctx, t, fixture.other.ID, "second", store.Private)
+		third := fixture.createMemo(ctx, t, fixture.owner.ID, "third", store.Public)
+
+		memos, err := fixture.service.ListSearchableMemos(ctx, 0, 100)
+		require.NoError(t, err)
+		require.Len(t, memos, 3)
+		// The corpus includes PRIVATE memos of every creator; authorization
+		// happens at retrieval time.
+		require.Equal(t, first.ID, memos[0].ID)
+		require.Equal(t, second.ID, memos[1].ID)
+		require.Equal(t, third.ID, memos[2].ID)
+	})
+
+	t.Run("paginates by keyset", func(t *testing.T) {
+		fixture := newMemoTestFixture(ctx, t)
+		first := fixture.createMemo(ctx, t, fixture.owner.ID, "first", store.Public)
+		second := fixture.createMemo(ctx, t, fixture.owner.ID, "second", store.Public)
+		third := fixture.createMemo(ctx, t, fixture.owner.ID, "third", store.Public)
+
+		page, err := fixture.service.ListSearchableMemos(ctx, 0, 2)
+		require.NoError(t, err)
+		require.Len(t, page, 2)
+		require.Equal(t, first.ID, page[0].ID)
+		require.Equal(t, second.ID, page[1].ID)
+
+		rest, err := fixture.service.ListSearchableMemos(ctx, page[1].ID, 2)
+		require.NoError(t, err)
+		require.Len(t, rest, 1)
+		require.Equal(t, third.ID, rest[0].ID)
+	})
+
+	t.Run("excludes archived memos and comments", func(t *testing.T) {
+		fixture := newMemoTestFixture(ctx, t)
+		parent := fixture.createMemo(ctx, t, fixture.owner.ID, "parent", store.Public)
+		archivedMemo := fixture.createMemo(ctx, t, fixture.owner.ID, "archived", store.Public)
+		archived := store.Archived
+		require.NoError(t, fixture.store.UpdateMemo(ctx, &store.UpdateMemo{ID: archivedMemo.ID, RowStatus: &archived}))
+		comment := fixture.createMemo(ctx, t, fixture.owner.ID, "comment", store.Public)
+		_, err := fixture.store.UpsertMemoRelation(ctx, &store.MemoRelation{
+			MemoID:        comment.ID,
+			RelatedMemoID: parent.ID,
+			Type:          store.MemoRelationComment,
+		})
+		require.NoError(t, err)
+
+		memos, err := fixture.service.ListSearchableMemos(ctx, 0, 100)
+		require.NoError(t, err)
+		require.Len(t, memos, 1)
+		require.Equal(t, parent.ID, memos[0].ID)
+	})
+}
+
+func TestGetSearchableMemo(t *testing.T) {
+	ctx := context.Background()
+	fixture := newMemoTestFixture(ctx, t)
+
+	normal := fixture.createMemo(ctx, t, fixture.owner.ID, "normal", store.Private)
+	archivedMemo := fixture.createMemo(ctx, t, fixture.owner.ID, "archived", store.Public)
+	archived := store.Archived
+	require.NoError(t, fixture.store.UpdateMemo(ctx, &store.UpdateMemo{ID: archivedMemo.ID, RowStatus: &archived}))
+	comment := fixture.createMemo(ctx, t, fixture.owner.ID, "comment", store.Public)
+	_, err := fixture.store.UpsertMemoRelation(ctx, &store.MemoRelation{
+		MemoID:        comment.ID,
+		RelatedMemoID: normal.ID,
+		Type:          store.MemoRelationComment,
+	})
+	require.NoError(t, err)
+
+	t.Run("returns corpus memos of any visibility", func(t *testing.T) {
+		m, err := fixture.service.GetSearchableMemo(ctx, normal.ID)
+		require.NoError(t, err)
+		require.NotNil(t, m)
+		require.Equal(t, normal.ID, m.ID)
+	})
+
+	t.Run("archived memos are out of the corpus", func(t *testing.T) {
+		m, err := fixture.service.GetSearchableMemo(ctx, archivedMemo.ID)
+		require.NoError(t, err)
+		require.Nil(t, m)
+	})
+
+	t.Run("comments are out of the corpus", func(t *testing.T) {
+		m, err := fixture.service.GetSearchableMemo(ctx, comment.ID)
+		require.NoError(t, err)
+		require.Nil(t, m)
+	})
+
+	t.Run("missing memos return nil", func(t *testing.T) {
+		m, err := fixture.service.GetSearchableMemo(ctx, 999)
+		require.NoError(t, err)
+		require.Nil(t, m)
+	})
+}
+
 func TestCheckReadAccess(t *testing.T) {
 	service := memo.NewService(nil)
 	owner := &store.User{ID: 1, Role: store.RoleUser}

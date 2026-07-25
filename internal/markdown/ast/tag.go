@@ -2,6 +2,7 @@ package ast
 
 import (
 	gast "github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/text"
 )
 
 // TagNode represents a #tag in the markdown AST.
@@ -10,6 +11,9 @@ type TagNode struct {
 
 	// Tag name without the # prefix
 	Tag []byte
+
+	// Segment is the source content range of the tag including the # prefix.
+	Segment text.Segment
 }
 
 // KindTag is the NodeKind for TagNode.

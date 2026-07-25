@@ -15,6 +15,7 @@ import (
 	"github.com/usememos/memos/internal/profile"
 	v1pb "github.com/usememos/memos/proto/gen/api/v1"
 	serverai "github.com/usememos/memos/server/ai"
+	"github.com/usememos/memos/server/ai/search"
 	"github.com/usememos/memos/server/auth"
 	"github.com/usememos/memos/server/memo"
 	"github.com/usememos/memos/server/notification"
@@ -57,6 +58,11 @@ type APIV1Service struct {
 	// the same struct-literal reason as aiChat.
 	memoReadOnce sync.Once
 	memoRead     *memo.Service
+
+	// searchOnce and search lazily build the search-document service for the
+	// same struct-literal reason as aiChat.
+	searchOnce sync.Once
+	search     *search.Service
 }
 
 func NewAPIV1Service(secret string, profile *profile.Profile, store *store.Store) *APIV1Service {
@@ -96,6 +102,23 @@ func (s *APIV1Service) memoReadService() *memo.Service {
 		s.memoRead = memo.NewService(s.Store)
 	})
 	return s.memoRead
+}
+
+// SearchService lazily builds the search-document service that maintains the
+// derived ai_search_document corpus. Memo write handlers emit invalidation
+// signals to it; the server runs its reconciliation loop in the background.
+func (s *APIV1Service) SearchService() *search.Service {
+	s.searchOnce.Do(func() {
+		markdownService := s.MarkdownService
+		if markdownService == nil {
+			markdownService = markdown.NewService(
+				markdown.WithTagExtension(),
+				markdown.WithMentionExtension(),
+			)
+		}
+		s.search = search.NewService(s.Store, s.memoReadService(), markdownService)
+	})
+	return s.search
 }
 
 // RegisterGateway registers the gRPC-Gateway and Connect handlers with the given Echo instance.

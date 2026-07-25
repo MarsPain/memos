@@ -155,3 +155,21 @@ CREATE TABLE ai_message (
 );
 
 CREATE INDEX idx_ai_message_conversation_id ON ai_message(conversation_id);
+
+-- ai_search_document
+CREATE TABLE ai_search_document (
+  id                    SERIAL  PRIMARY KEY,
+  memo_id               INTEGER NOT NULL,
+  memo_uid              TEXT    NOT NULL,
+  memo_updated_ts       BIGINT  NOT NULL,
+  content_hash          TEXT    NOT NULL,
+  projection_version    INTEGER NOT NULL,
+  normalization_version INTEGER NOT NULL,
+  title                 TEXT    NOT NULL DEFAULT '',
+  tags                  JSONB   NOT NULL DEFAULT '[]',
+  content               TEXT    NOT NULL DEFAULT '',
+  spans                 JSONB   NOT NULL DEFAULT '[]',
+  created_ts            BIGINT  NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()),
+  updated_ts            BIGINT  NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()),
+  UNIQUE (memo_id)
+);

@@ -76,3 +76,11 @@ func (s *APIV1Service) dispatchMemoUpdatedSideEffects(ctx context.Context, memo 
 		CreatorID:  resolveSSECreatorID(memo, parentMemo),
 	})
 }
+
+// invalidateSearchDocument emits the lightweight post-commit invalidation
+// signal for a memo's derived search document. The projection is rebuilt
+// outside the write path by search reconciliation; the signal only shortens
+// the lag, and reconciliation repairs any dropped signal.
+func (s *APIV1Service) invalidateSearchDocument(memoID int32) {
+	s.SearchService().Invalidate(memoID)
+}

@@ -95,4 +95,9 @@ type Driver interface {
 	CreateAIMessageAttempt(ctx context.Context, attempt *AIMessage) (*AIMessage, error)
 	ListAIMessages(ctx context.Context, find *FindAIMessage) ([]*AIMessage, error)
 	UpdateAIMessage(ctx context.Context, update *UpdateAIMessage) error
+
+	// AISearchDocument model related methods.
+	UpsertAISearchDocument(ctx context.Context, upsert *AISearchDocument) (*AISearchDocument, error)
+	ListAISearchDocuments(ctx context.Context, find *FindAISearchDocument) ([]*AISearchDocument, error)
+	DeleteAISearchDocument(ctx context.Context, delete *DeleteAISearchDocument) error
 }

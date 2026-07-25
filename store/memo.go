@@ -71,6 +71,10 @@ type FindMemo struct {
 	ExcludeComments bool
 	Filters         []string
 
+	// IDGreaterThan with OrderByIDAsc and Limit gives keyset pagination in
+	// ascending ID order for bounded sweeps over the memo table.
+	IDGreaterThan *int32
+
 	// Pagination
 	Limit  *int
 	Offset *int
@@ -79,6 +83,9 @@ type FindMemo struct {
 	OrderByPinned    bool
 	OrderByUpdatedTs bool
 	OrderByTimeAsc   bool
+	// OrderByIDAsc orders by ascending ID alone, ignoring the other ordering
+	// flags. It is the keyset-pagination order.
+	OrderByIDAsc bool
 }
 
 type FindMemoPayload struct {

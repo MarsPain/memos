@@ -47,6 +47,9 @@ type Service interface {
 	// GenerateSnippet creates plain text summary
 	GenerateSnippet(content []byte, maxLength int) (string, error)
 
+	// ExtractText extracts plain text chunks with source byte ranges
+	ExtractText(content []byte) ([]TextChunk, error)
+
 	// ValidateContent checks for syntax errors
 	ValidateContent(content []byte) error
 

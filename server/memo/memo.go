@@ -148,3 +148,40 @@ func (s *Service) ListReadableMemos(ctx context.Context, user *store.User) ([]*s
 	}
 	return memos, nil
 }
+
+// ListSearchableMemos enumerates the searchable corpus — NORMAL, top-level
+// (non-comment) memos — in ascending ID order after afterID, for corpus
+// projection. It performs no read authorization: search documents are shared
+// derived data and every candidate is reauthorized against current Memo read
+// permission at retrieval time.
+func (s *Service) ListSearchableMemos(ctx context.Context, afterID int32, limit int) ([]*store.Memo, error) {
+	rowStatus := store.Normal
+	find := &store.FindMemo{
+		RowStatus:       &rowStatus,
+		ExcludeComments: true,
+		IDGreaterThan:   &afterID,
+		OrderByIDAsc:    true,
+		Limit:           &limit,
+	}
+	memos, err := s.store.ListMemos(ctx, find)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to list memos")
+	}
+	return memos, nil
+}
+
+// GetSearchableMemo returns the memo with the given ID when it belongs to the
+// searchable corpus — it is NORMAL and top-level — and nil otherwise. Like
+// ListSearchableMemos it performs no read authorization.
+func (s *Service) GetSearchableMemo(ctx context.Context, id int32) (*store.Memo, error) {
+	rowStatus := store.Normal
+	m, err := s.store.GetMemo(ctx, &store.FindMemo{
+		ID:              &id,
+		RowStatus:       &rowStatus,
+		ExcludeComments: true,
+	})
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get memo")
+	}
+	return m, nil
+}
