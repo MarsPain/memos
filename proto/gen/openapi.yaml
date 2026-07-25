@@ -51,6 +51,36 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /api/v1/ai/search/memos:
+        post:
+            tags:
+                - AIService
+            description: |-
+                SearchMemos searches the memos the caller may read with exact, partial,
+                 and typo-tolerant matching over the derived search documents. Every
+                 result is reauthorized and revision-checked against the current source
+                 memo before its snippet is returned. Search works with no generation or
+                 embedding configuration.
+            operationId: AIService_SearchMemos
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SearchMemosRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SearchMemosResponse'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /api/v1/ai/{ai}/*:
         get:
             tags:
@@ -2602,6 +2632,22 @@ components:
                 snippet:
                     type: string
                     description: The quoted source text from the memo.
+                sourceRevision:
+                    type: string
+                    description: |-
+                        The revision (update time) of the source memo the snippet was quoted
+                         from.
+                    format: date-time
+                sourceHash:
+                    type: string
+                    description: The hash of the source content the snippet was quoted from.
+                sourceStart:
+                    type: integer
+                    description: The byte range of the quoted snippet within the source content.
+                    format: int32
+                sourceEnd:
+                    type: integer
+                    format: int32
             description: ChatCitation references the memo a chat answer was grounded in.
         ChatConversation:
             type: object
@@ -2681,6 +2727,14 @@ components:
                 clientRequestId:
                     type: string
                     description: The client request ID of a user message; empty for assistant messages.
+                retrievalReasons:
+                    type: array
+                    items:
+                        type: string
+                    description: |-
+                        Machine-readable partial/degraded reasons from the retrieval phase, such
+                         as "time_budget_exhausted"; empty means retrieval covered the searchable
+                         corpus completely. Only set on assistant messages.
             description: ChatMessage is a single message in an AI chat conversation.
         Color:
             type: object
@@ -3668,6 +3722,44 @@ components:
                     type: string
                     description: Output only. The snippet of the memo content. Plain text only.
             description: Memo reference in relations.
+        MemoSearchResult:
+            type: object
+            properties:
+                memo:
+                    type: string
+                    description: |-
+                        The resource name of the matching memo.
+                         Format: memos/{memo}
+                snippet:
+                    type: string
+                    description: The quoted source text around the strongest match.
+                rankReasons:
+                    type: array
+                    items:
+                        type: string
+                    description: |-
+                        Machine-readable reasons the result ranked, such as "title_exact" or
+                         "content_fuzzy".
+                sourceRevision:
+                    type: string
+                    description: |-
+                        The revision (update time) of the source memo the snippet was quoted
+                         from.
+                    format: date-time
+                sourceHash:
+                    type: string
+                    description: The hash of the source content the snippet was quoted from.
+                sourceStart:
+                    type: integer
+                    description: The byte range of the quoted snippet within the source content.
+                    format: int32
+                sourceEnd:
+                    type: integer
+                    format: int32
+            description: |-
+                MemoSearchResult is one memo matching a search query. The snippet is quoted
+                 from the memo's current source after reauthorization and revision checking;
+                 it can never carry stale indexed text.
         MemoShare:
             type: object
             properties:
@@ -3845,6 +3937,69 @@ components:
                     type: string
                     description: When the access token expires.
                     format: date-time
+        SearchMemosFilter:
+            type: object
+            properties:
+                tags:
+                    type: array
+                    items:
+                        type: string
+                    description: Optional. Memos must carry all of these tags.
+                createdAfter:
+                    type: string
+                    description: Optional. Memos must be created at or after this time.
+                    format: date-time
+                createdBefore:
+                    type: string
+                    description: Optional. Memos must be created at or before this time.
+                    format: date-time
+                visibility:
+                    enum:
+                        - VISIBILITY_UNSPECIFIED
+                        - PRIVATE
+                        - PROTECTED
+                        - PUBLIC
+                    type: string
+                    description: Optional. Memos must have exactly this visibility.
+                    format: enum
+                creator:
+                    type: string
+                    description: |-
+                        Optional. Memos must be created by this user.
+                         Format: users/{user_id}
+            description: |-
+                SearchMemosFilter narrows search candidates by structured product intent.
+                 All set fields must hold for a memo to appear in the results.
+        SearchMemosRequest:
+            required:
+                - query
+            type: object
+            properties:
+                query:
+                    type: string
+                    description: |-
+                        Required. The free-text query, matched exactly, partially, and with typo
+                         tolerance against normalized memo titles, tags, and content.
+                filter:
+                    allOf:
+                        - $ref: '#/components/schemas/SearchMemosFilter'
+                    description: Optional. Structured filters narrowing the search candidates.
+        SearchMemosResponse:
+            type: object
+            properties:
+                results:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/MemoSearchResult'
+                    description: The ranked results, best first.
+                partialReasons:
+                    type: array
+                    items:
+                        type: string
+                    description: |-
+                        Machine-readable reasons the coverage is partial or degraded, such as
+                         "scan_budget_exhausted". Empty means the searchable corpus was covered
+                         completely; partial coverage is never presented as complete.
         SetMemoAttachmentsRequest:
             required:
                 - name

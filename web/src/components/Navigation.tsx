@@ -1,4 +1,4 @@
-import { BellIcon, EarthIcon, InfoIcon, LibraryIcon, MessageSquareIcon, PaperclipIcon, UserCircleIcon } from "lucide-react";
+import { BellIcon, EarthIcon, InfoIcon, LibraryIcon, MessageSquareIcon, PaperclipIcon, SearchIcon, UserCircleIcon } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import useCurrentUser from "@/hooks/useCurrentUser";
@@ -58,6 +58,14 @@ const Navigation = (props: Props) => {
     title: t("common.chat"),
     icon: <MessageSquareIcon className="w-6 h-auto shrink-0" />,
   };
+  // Search works with no generation configuration, so it is always visible
+  // to signed-in users.
+  const searchNavLink: NavLinkItem = {
+    id: "header-search",
+    path: Routes.SEARCH,
+    title: t("common.search"),
+    icon: <SearchIcon className="w-6 h-auto shrink-0" />,
+  };
   const unreadCount = notifications.filter((n) => n.status === UserNotification_Status.UNREAD).length;
   const inboxNavLink: NavLinkItem = {
     id: "header-inbox",
@@ -82,7 +90,7 @@ const Navigation = (props: Props) => {
   };
 
   const primaryNavLinks: NavLinkItem[] = currentUser
-    ? [homeNavLink, exploreNavLink, attachmentsNavLink, chatNavLink, inboxNavLink]
+    ? [homeNavLink, exploreNavLink, attachmentsNavLink, chatNavLink, searchNavLink, inboxNavLink]
     : [exploreNavLink, aboutNavLink, signInNavLink];
   const inboxAriaLabel = unreadCount > 0 ? `${t("common.inbox")}, ${unreadCount} unread` : t("common.inbox");
 

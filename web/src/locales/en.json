@@ -86,6 +86,7 @@
     "new-chat": "New chat",
     "no-conversations": "No conversations yet. Start a new chat to ask questions about your memos.",
     "rate-limited": "Sending too many messages. Wait a moment and try again.",
+    "retrieval-partial": "Answer grounded on partial coverage ({{reasons}}).",
     "retry": "Retry",
     "send": "Send",
     "send-failed": "Failed to send message",
@@ -454,6 +455,24 @@
   "router": {
     "back-to-top": "Back to Top",
     "go-to-home": "Go to Home"
+  },
+  "search": {
+    "title": "Search",
+    "input-placeholder": "Search your memos by keyword, tag, or phrase...",
+    "run": "Search",
+    "filters-title": "Filters",
+    "filter-tags": "Tags",
+    "filter-tags-placeholder": "tag1, tag2",
+    "filter-visibility": "Visibility",
+    "filter-visibility-any": "Any visibility",
+    "filter-created-after": "Created after",
+    "filter-created-before": "Created before",
+    "filter-creator": "Creator",
+    "filter-creator-placeholder": "users/{id}",
+    "partial-banner": "Showing partial results: the search could not cover every memo ({{reasons}}).",
+    "no-results": "No memos match your search.",
+    "load-failed": "Search failed. Please try again.",
+    "empty": "Search your memos with exact, partial, and typo-tolerant matching."
   },
   "setting": {
     "access-token": {

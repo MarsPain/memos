@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package memos.api.v1;
 
+import "api/v1/memo_service.proto";
 import "google/api/annotations.proto";
 import "google/api/client.proto";
 import "google/api/field_behavior.proto";
@@ -55,6 +56,18 @@ service AIService {
   // gRPC-Gateway JSON transport does not support streaming methods.
   rpc SendChatMessage(SendChatMessageRequest) returns (stream SendChatMessageEvent) {
     option (google.api.method_signature) = "conversation,content,request_id";
+  }
+  // SearchMemos searches the memos the caller may read with exact, partial,
+  // and typo-tolerant matching over the derived search documents. Every
+  // result is reauthorized and revision-checked against the current source
+  // memo before its snippet is returned. Search works with no generation or
+  // embedding configuration.
+  rpc SearchMemos(SearchMemosRequest) returns (SearchMemosResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/ai/search/memos"
+      body: "*"
+    };
+    option (google.api.method_signature) = "query";
   }
 }
 
@@ -130,6 +143,11 @@ message ChatMessage {
 
   // The client request ID of a user message; empty for assistant messages.
   string client_request_id = 7;
+
+  // Machine-readable partial/degraded reasons from the retrieval phase, such
+  // as "time_budget_exhausted"; empty means retrieval covered the searchable
+  // corpus completely. Only set on assistant messages.
+  repeated string retrieval_reasons = 8;
 }
 
 // ChatCitation references the memo a chat answer was grounded in.
@@ -140,6 +158,17 @@ message ChatCitation {
 
   // The quoted source text from the memo.
   string snippet = 2;
+
+  // The revision (update time) of the source memo the snippet was quoted
+  // from.
+  google.protobuf.Timestamp source_revision = 3;
+
+  // The hash of the source content the snippet was quoted from.
+  string source_hash = 4;
+
+  // The byte range of the quoted snippet within the source content.
+  int32 source_start = 5;
+  int32 source_end = 6;
 }
 
 // ChatConversation is a private AI chat conversation owned by a user.
@@ -237,4 +266,70 @@ message SendChatMessageStart {
 
   // The assistant attempt answering it, still generating.
   ChatMessage assistant_message = 2;
+}
+
+message SearchMemosRequest {
+  // Required. The free-text query, matched exactly, partially, and with typo
+  // tolerance against normalized memo titles, tags, and content.
+  string query = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // Optional. Structured filters narrowing the search candidates.
+  SearchMemosFilter filter = 2 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// SearchMemosFilter narrows search candidates by structured product intent.
+// All set fields must hold for a memo to appear in the results.
+message SearchMemosFilter {
+  // Optional. Memos must carry all of these tags.
+  repeated string tags = 1 [(google.api.field_behavior) = OPTIONAL];
+
+  // Optional. Memos must be created at or after this time.
+  google.protobuf.Timestamp created_after = 2 [(google.api.field_behavior) = OPTIONAL];
+
+  // Optional. Memos must be created at or before this time.
+  google.protobuf.Timestamp created_before = 3 [(google.api.field_behavior) = OPTIONAL];
+
+  // Optional. Memos must have exactly this visibility.
+  Visibility visibility = 4 [(google.api.field_behavior) = OPTIONAL];
+
+  // Optional. Memos must be created by this user.
+  // Format: users/{user_id}
+  string creator = 5 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// MemoSearchResult is one memo matching a search query. The snippet is quoted
+// from the memo's current source after reauthorization and revision checking;
+// it can never carry stale indexed text.
+message MemoSearchResult {
+  // The resource name of the matching memo.
+  // Format: memos/{memo}
+  string memo = 1;
+
+  // The quoted source text around the strongest match.
+  string snippet = 2;
+
+  // Machine-readable reasons the result ranked, such as "title_exact" or
+  // "content_fuzzy".
+  repeated string rank_reasons = 3;
+
+  // The revision (update time) of the source memo the snippet was quoted
+  // from.
+  google.protobuf.Timestamp source_revision = 4;
+
+  // The hash of the source content the snippet was quoted from.
+  string source_hash = 5;
+
+  // The byte range of the quoted snippet within the source content.
+  int32 source_start = 6;
+  int32 source_end = 7;
+}
+
+message SearchMemosResponse {
+  // The ranked results, best first.
+  repeated MemoSearchResult results = 1;
+
+  // Machine-readable reasons the coverage is partial or degraded, such as
+  // "scan_budget_exhausted". Empty means the searchable corpus was covered
+  // completely; partial coverage is never presented as complete.
+  repeated string partial_reasons = 2;
 }

@@ -36,6 +36,7 @@ const MemoDetail = lazyWithReload(() => import("@/pages/MemoDetail"));
 const NotFound = lazyWithReload(() => import("@/pages/NotFound"));
 const PermissionDenied = lazyWithReload(() => import("@/pages/PermissionDenied"));
 const Attachments = lazyWithReload(() => import("@/pages/Attachments"));
+const Search = lazyWithReload(() => import("@/pages/Search"));
 const Setting = lazyWithReload(() => import("@/pages/Setting"));
 const Shortcuts = lazyWithReload(() => import("@/pages/Shortcuts"));
 const SignIn = lazyWithReload(() => import("@/pages/SignIn"));
@@ -106,6 +107,7 @@ export const routeConfig: RouteObject[] = [
               { path: Routes.ATTACHMENTS, element: <Attachments /> },
               { path: Routes.CHAT, element: <Chat /> },
               { path: Routes.INBOX, element: <Inboxes /> },
+              { path: Routes.SEARCH, element: <Search /> },
               { path: Routes.SETTING, element: <Setting /> },
             ],
           },

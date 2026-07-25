@@ -3,6 +3,7 @@ package v1
 import (
 	"context"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -206,17 +207,22 @@ func convertChatMessageToProto(message serverai.Message) *v1pb.ChatMessage {
 	citations := make([]*v1pb.ChatCitation, 0, len(message.Citations))
 	for _, citation := range message.Citations {
 		citations = append(citations, &v1pb.ChatCitation{
-			Memo:    "memos/" + citation.MemoUID,
-			Snippet: citation.Snippet,
+			Memo:           "memos/" + citation.MemoUID,
+			Snippet:        citation.Snippet,
+			SourceRevision: timestamppb.New(time.Unix(citation.SourceRevision, 0)),
+			SourceHash:     citation.SourceHash,
+			SourceStart:    int32(citation.SourceStart),
+			SourceEnd:      int32(citation.SourceEnd),
 		})
 	}
 	return &v1pb.ChatMessage{
-		Role:            role,
-		Content:         message.Content,
-		CreateTime:      timestamppb.New(message.CreateTime),
-		Citations:       citations,
-		Status:          messageStatus,
-		Attempt:         message.Attempt,
-		ClientRequestId: message.ClientRequestID,
+		Role:             role,
+		Content:          message.Content,
+		CreateTime:       timestamppb.New(message.CreateTime),
+		Citations:        citations,
+		Status:           messageStatus,
+		Attempt:          message.Attempt,
+		ClientRequestId:  message.ClientRequestID,
+		RetrievalReasons: message.RetrievalReasons,
 	}
 }

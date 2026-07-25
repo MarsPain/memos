@@ -47,6 +47,9 @@ type Message struct {
 	ClientRequestID string
 	CreateTime      time.Time
 	Citations       []Citation
+	// RetrievalReasons carries the machine-readable partial/degraded reasons
+	// of the retrieval phase on assistant messages.
+	RetrievalReasons []string
 }
 
 // CreateConversation creates a persisted conversation owned by the user.
@@ -218,7 +221,15 @@ func convertMessage(stored *store.AIMessage) Message {
 		message.ClientRequestID = *stored.ClientRequestID
 	}
 	for _, citation := range stored.Payload.GetCitations() {
-		message.Citations = append(message.Citations, Citation{MemoUID: citation.GetMemoUid(), Snippet: citation.GetSnippet()})
+		message.Citations = append(message.Citations, Citation{
+			MemoUID:        citation.GetMemoUid(),
+			Snippet:        citation.GetSnippet(),
+			SourceRevision: citation.GetSourceRevision(),
+			SourceHash:     citation.GetSourceHash(),
+			SourceStart:    int(citation.GetSourceStart()),
+			SourceEnd:      int(citation.GetSourceEnd()),
+		})
 	}
+	message.RetrievalReasons = stored.Payload.GetRetrievalReasons()
 	return message
 }

@@ -2,7 +2,9 @@ package ai_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -15,8 +17,10 @@ import (
 	internalai "github.com/usememos/memos/internal/ai"
 	"github.com/usememos/memos/internal/ai/aitest"
 	"github.com/usememos/memos/internal/ai/gateway"
+	"github.com/usememos/memos/internal/markdown"
 	storepb "github.com/usememos/memos/proto/gen/store"
 	serverai "github.com/usememos/memos/server/ai"
+	"github.com/usememos/memos/server/ai/search"
 	"github.com/usememos/memos/server/memo"
 	"github.com/usememos/memos/store"
 	teststore "github.com/usememos/memos/store/test"
@@ -27,6 +31,7 @@ type chatTestFixture struct {
 	store   *store.Store
 	model   *aitest.Model
 	factory func() gateway.ModelFactory
+	search  *search.Service
 }
 
 func newChatTestFixture(ctx context.Context, t *testing.T, model internalai.Model, factoryErr error) *chatTestFixture {
@@ -45,8 +50,21 @@ func newChatTestFixtureWithLimits(ctx context.Context, t *testing.T, model inter
 			return model, nil
 		}
 	}
+	markdownService := markdown.NewService(markdown.WithTagExtension(), markdown.WithMentionExtension())
 	service := serverai.NewServiceWithLimits(st, memo.NewService(st), factory, limits)
-	return &chatTestFixture{service: service, store: st, model: fake, factory: factory}
+	return &chatTestFixture{
+		service: service,
+		store:   st,
+		model:   fake,
+		factory: factory,
+		search:  search.NewService(st, memo.NewService(st), markdownService),
+	}
+}
+
+// syncSearch rebuilds the derived search documents, closing the index lag
+// for the memos a test just wrote.
+func (f *chatTestFixture) syncSearch(ctx context.Context) {
+	f.search.RunOnce(ctx)
 }
 
 func (f *chatTestFixture) configureGeneration(ctx context.Context, t *testing.T) {
@@ -249,6 +267,7 @@ func TestSendMessageStreamsGroundedAnswer(t *testing.T) {
 	fixture.createMemo(ctx, t, alice.ID, "alice-cooking", "Risotto recipe notes.", store.Public)
 	// Bob's memo matches the query but must never be cited in Alice's answer.
 	fixture.createMemo(ctx, t, bob.ID, "bob-hiking", "Bob's secret hiking spots.", store.Private)
+	fixture.syncSearch(ctx)
 
 	conversation := fixture.createConversation(ctx, t, alice, "")
 	collector, err := fixture.send(ctx, alice, conversation.UID, "Where should I go hiking", "req-1")
@@ -307,6 +326,7 @@ func TestSendMessageWithoutMatchingMemos(t *testing.T) {
 	fixture.configureGeneration(ctx, t)
 	alice := fixture.createUser(ctx, t, "alice")
 	fixture.createMemo(ctx, t, alice.ID, "alice-cooking", "Risotto recipe notes.", store.Public)
+	fixture.syncSearch(ctx)
 	conversation := fixture.createConversation(ctx, t, alice, "")
 
 	collector, err := fixture.send(ctx, alice, conversation.UID, "What is the capital of France?", "req-1")
@@ -866,4 +886,74 @@ func TestConversationAccumulatesMessages(t *testing.T) {
 	for i := 1; i < len(messages); i++ {
 		require.False(t, messages[i].CreateTime.Before(messages[i-1].CreateTime))
 	}
+}
+
+func TestSendMessageCitesTypoTolerantMatch(t *testing.T) {
+	ctx := context.Background()
+	fixture := newChatTestFixture(ctx, t, &aitest.Model{
+		StreamEvents: []internalai.StreamEvent{{Delta: "answer"}},
+	}, nil)
+	fixture.configureGeneration(ctx, t)
+	alice := fixture.createUser(ctx, t, "alice")
+	memo := fixture.createMemo(ctx, t, alice.ID, "alice-hiking", "My favorite hiking spot is the alpine lakes trail.", store.Private)
+	fixture.syncSearch(ctx)
+	conversation := fixture.createConversation(ctx, t, alice, "")
+
+	// "hikxng" is one substitution away from "hiking": the real retrieval
+	// path matches it typo-tolerantly.
+	collector, err := fixture.send(ctx, alice, conversation.UID, "hikxng", "req-1")
+	require.NoError(t, err)
+	complete := requireCompleteEvent(t, collector)
+	require.Len(t, complete.Citations, 1)
+	require.Equal(t, memo.UID, complete.Citations[0].MemoUID)
+}
+
+func TestSendMessageBoundsProviderContextByTokens(t *testing.T) {
+	ctx := context.Background()
+	fixture := newChatTestFixture(ctx, t, &aitest.Model{
+		StreamEvents: []internalai.StreamEvent{{Delta: "answer"}},
+	}, nil)
+	fixture.configureGeneration(ctx, t)
+	alice := fixture.createUser(ctx, t, "alice")
+	// Thirty matching memos of about 4,000 runes each cannot all fit the
+	// 8,000-token context budget; the budget favors diverse source memos
+	// over depth.
+	for i := 0; i < 30; i++ {
+		fixture.createMemo(ctx, t, alice.ID, fmt.Sprintf("memo-%02d", i), "hiking "+strings.Repeat("trail notes ", 340), store.Private)
+	}
+	fixture.syncSearch(ctx)
+	conversation := fixture.createConversation(ctx, t, alice, "")
+
+	collector, err := fixture.send(ctx, alice, conversation.UID, "hiking", "req-1")
+	require.NoError(t, err)
+	complete := requireCompleteEvent(t, collector)
+	// More than the old scaffold's three memos are cited, and the quoted
+	// context stays within the token budget.
+	require.Greater(t, len(complete.Citations), 3)
+	prompt := fixture.model.StreamRequests[0].Messages[1].Content
+	require.LessOrEqual(t, len([]rune(prompt)), 8000*4+200)
+}
+
+func TestSendMessageCarriesRetrievalReasons(t *testing.T) {
+	ctx := context.Background()
+	fixture := newChatTestFixture(ctx, t, &aitest.Model{
+		StreamEvents: []internalai.StreamEvent{{Delta: "answer"}},
+	}, nil)
+	fixture.configureGeneration(ctx, t)
+	alice := fixture.createUser(ctx, t, "alice")
+	fixture.createMemo(ctx, t, alice.ID, "alice-hiking", "My favorite hiking spot is the alpine lakes trail.", store.Private)
+	fixture.syncSearch(ctx)
+	conversation := fixture.createConversation(ctx, t, alice, "")
+
+	// A question beyond the normalized-query budget is truncated, and the
+	// attempt honestly carries the machine-readable reason.
+	collector, err := fixture.send(ctx, alice, conversation.UID, "hiking "+strings.Repeat("trail ", 300), "req-1")
+	require.NoError(t, err)
+	complete := requireCompleteEvent(t, collector)
+	require.Contains(t, complete.RetrievalReasons, "query_truncated")
+
+	// The reason persists on the stored attempt.
+	messages := fixture.getMessages(ctx, t, alice, conversation.UID)
+	require.Len(t, messages, 2)
+	require.Contains(t, messages[1].RetrievalReasons, "query_truncated")
 }

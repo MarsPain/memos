@@ -14,6 +14,14 @@ message AIMessagePayload {
     string memo_uid = 1;
     // The quoted source text from the memo.
     string snippet = 2;
+    // The revision (update time) of the source memo the snippet was quoted
+    // from.
+    int64 source_revision = 3;
+    // The hash of the source content the snippet was quoted from.
+    string source_hash = 4;
+    // The byte range of the quoted snippet within the source content.
+    int32 source_start = 5;
+    int32 source_end = 6;
   }
 
   // The provider ID that produced the message.
@@ -32,4 +40,9 @@ message AIMessagePayload {
 
   // The normalized error category when the attempt failed.
   string error = 7;
+
+  // Machine-readable partial/degraded reasons from the retrieval phase, such
+  // as "time_budget_exhausted". Empty means retrieval covered the searchable
+  // corpus completely.
+  repeated string retrieval_reasons = 8;
 }

@@ -37,9 +37,13 @@ type AIMessagePayload struct {
 	// Source citations backing an assistant message.
 	Citations []*AIMessagePayload_Citation `protobuf:"bytes,6,rep,name=citations,proto3" json:"citations,omitempty"`
 	// The normalized error category when the attempt failed.
-	Error         string `protobuf:"bytes,7,opt,name=error,proto3" json:"error,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Error string `protobuf:"bytes,7,opt,name=error,proto3" json:"error,omitempty"`
+	// Machine-readable partial/degraded reasons from the retrieval phase, such
+	// as "time_budget_exhausted". Empty means retrieval covered the searchable
+	// corpus completely.
+	RetrievalReasons []string `protobuf:"bytes,8,rep,name=retrieval_reasons,json=retrievalReasons,proto3" json:"retrieval_reasons,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *AIMessagePayload) Reset() {
@@ -121,13 +125,28 @@ func (x *AIMessagePayload) GetError() string {
 	return ""
 }
 
+func (x *AIMessagePayload) GetRetrievalReasons() []string {
+	if x != nil {
+		return x.RetrievalReasons
+	}
+	return nil
+}
+
 // Citation references the memo an assistant answer was grounded in.
 type AIMessagePayload_Citation struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The UID of the cited memo.
 	MemoUid string `protobuf:"bytes,1,opt,name=memo_uid,json=memoUid,proto3" json:"memo_uid,omitempty"`
 	// The quoted source text from the memo.
-	Snippet       string `protobuf:"bytes,2,opt,name=snippet,proto3" json:"snippet,omitempty"`
+	Snippet string `protobuf:"bytes,2,opt,name=snippet,proto3" json:"snippet,omitempty"`
+	// The revision (update time) of the source memo the snippet was quoted
+	// from.
+	SourceRevision int64 `protobuf:"varint,3,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
+	// The hash of the source content the snippet was quoted from.
+	SourceHash string `protobuf:"bytes,4,opt,name=source_hash,json=sourceHash,proto3" json:"source_hash,omitempty"`
+	// The byte range of the quoted snippet within the source content.
+	SourceStart   int32 `protobuf:"varint,5,opt,name=source_start,json=sourceStart,proto3" json:"source_start,omitempty"`
+	SourceEnd     int32 `protobuf:"varint,6,opt,name=source_end,json=sourceEnd,proto3" json:"source_end,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -176,11 +195,39 @@ func (x *AIMessagePayload_Citation) GetSnippet() string {
 	return ""
 }
 
+func (x *AIMessagePayload_Citation) GetSourceRevision() int64 {
+	if x != nil {
+		return x.SourceRevision
+	}
+	return 0
+}
+
+func (x *AIMessagePayload_Citation) GetSourceHash() string {
+	if x != nil {
+		return x.SourceHash
+	}
+	return ""
+}
+
+func (x *AIMessagePayload_Citation) GetSourceStart() int32 {
+	if x != nil {
+		return x.SourceStart
+	}
+	return 0
+}
+
+func (x *AIMessagePayload_Citation) GetSourceEnd() int32 {
+	if x != nil {
+		return x.SourceEnd
+	}
+	return 0
+}
+
 var File_store_ai_proto protoreflect.FileDescriptor
 
 const file_store_ai_proto_rawDesc = "" +
 	"\n" +
-	"\x0estore/ai.proto\x12\vmemos.store\"\xd1\x02\n" +
+	"\x0estore/ai.proto\x12\vmemos.store\"\x8b\x04\n" +
 	"\x10AIMessagePayload\x12\x1f\n" +
 	"\vprovider_id\x18\x01 \x01(\tR\n" +
 	"providerId\x12\x14\n" +
@@ -189,10 +236,17 @@ const file_store_ai_proto_rawDesc = "" +
 	"\routput_tokens\x18\x04 \x01(\x05R\foutputTokens\x12!\n" +
 	"\ftotal_tokens\x18\x05 \x01(\x05R\vtotalTokens\x12D\n" +
 	"\tcitations\x18\x06 \x03(\v2&.memos.store.AIMessagePayload.CitationR\tcitations\x12\x14\n" +
-	"\x05error\x18\a \x01(\tR\x05error\x1a?\n" +
+	"\x05error\x18\a \x01(\tR\x05error\x12+\n" +
+	"\x11retrieval_reasons\x18\b \x03(\tR\x10retrievalReasons\x1a\xcb\x01\n" +
 	"\bCitation\x12\x19\n" +
 	"\bmemo_uid\x18\x01 \x01(\tR\amemoUid\x12\x18\n" +
-	"\asnippet\x18\x02 \x01(\tR\asnippetB\x92\x01\n" +
+	"\asnippet\x18\x02 \x01(\tR\asnippet\x12'\n" +
+	"\x0fsource_revision\x18\x03 \x01(\x03R\x0esourceRevision\x12\x1f\n" +
+	"\vsource_hash\x18\x04 \x01(\tR\n" +
+	"sourceHash\x12!\n" +
+	"\fsource_start\x18\x05 \x01(\x05R\vsourceStart\x12\x1d\n" +
+	"\n" +
+	"source_end\x18\x06 \x01(\x05R\tsourceEndB\x92\x01\n" +
 	"\x0fcom.memos.storeB\aAiProtoP\x01Z)github.com/usememos/memos/proto/gen/store\xa2\x02\x03MSX\xaa\x02\vMemos.Store\xca\x02\vMemos\\Store\xe2\x02\x17Memos\\Store\\GPBMetadata\xea\x02\fMemos::Storeb\x06proto3"
 
 var (

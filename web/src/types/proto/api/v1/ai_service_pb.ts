@@ -4,6 +4,8 @@
 
 import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { Visibility } from "./memo_service_pb";
+import { file_api_v1_memo_service } from "./memo_service_pb";
 import { file_google_api_annotations } from "../../google/api/annotations_pb";
 import { file_google_api_client } from "../../google/api/client_pb";
 import { file_google_api_field_behavior } from "../../google/api/field_behavior_pb";
@@ -15,7 +17,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file api/v1/ai_service.proto.
  */
 export const file_api_v1_ai_service: GenFile = /*@__PURE__*/
-  fileDesc("ChdhcGkvdjEvYWlfc2VydmljZS5wcm90bxIMbWVtb3MuYXBpLnYxIkkKEVRyYW5zY3JpYmVSZXF1ZXN0EjQKBWF1ZGlvGAEgASgLMiAubWVtb3MuYXBpLnYxLlRyYW5zY3JpcHRpb25BdWRpb0ID4EECIncKElRyYW5zY3JpcHRpb25BdWRpbxIWCgdjb250ZW50GAEgASgMQgPgQQRIABINCgN1cmkYAiABKAlIABIVCghmaWxlbmFtZRgDIAEoCUID4EEBEhkKDGNvbnRlbnRfdHlwZRgEIAEoCUID4EEBQggKBnNvdXJjZSIiChJUcmFuc2NyaWJlUmVzcG9uc2USDAoEdGV4dBgBIAEoCSKbAwoLQ2hhdE1lc3NhZ2USLAoEcm9sZRgBIAEoDjIeLm1lbW9zLmFwaS52MS5DaGF0TWVzc2FnZS5Sb2xlEg8KB2NvbnRlbnQYAiABKAkSLwoLY3JlYXRlX3RpbWUYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi0KCWNpdGF0aW9ucxgEIAMoCzIaLm1lbW9zLmFwaS52MS5DaGF0Q2l0YXRpb24SMAoGc3RhdHVzGAUgASgOMiAubWVtb3MuYXBpLnYxLkNoYXRNZXNzYWdlLlN0YXR1cxIPCgdhdHRlbXB0GAYgASgFEhkKEWNsaWVudF9yZXF1ZXN0X2lkGAcgASgJIjUKBFJvbGUSFAoQUk9MRV9VTlNQRUNJRklFRBAAEggKBFVTRVIQARINCglBU1NJU1RBTlQQAiJYCgZTdGF0dXMSFgoSU1RBVFVTX1VOU1BFQ0lGSUVEEAASDQoJU1RSRUFNSU5HEAESDAoIQ09NUExFVEUQAhIKCgZGQUlMRUQQAxINCglDQU5DRUxMRUQQBCItCgxDaGF0Q2l0YXRpb24SDAoEbWVtbxgBIAEoCRIPCgdzbmlwcGV0GAIgASgJItwBChBDaGF0Q29udmVyc2F0aW9uEisKCG1lc3NhZ2VzGAEgAygLMhkubWVtb3MuYXBpLnYxLkNoYXRNZXNzYWdlEhwKFGdlbmVyYXRpb25fYXZhaWxhYmxlGAIgASgIEgwKBG5hbWUYAyABKAkSDQoFdGl0bGUYBCABKAkSLwoLY3JlYXRlX3RpbWUYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi8KC3VwZGF0ZV90aW1lGAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIzCh1DcmVhdGVDaGF0Q29udmVyc2F0aW9uUmVxdWVzdBISCgV0aXRsZRgBIAEoCUID4EEBIh4KHExpc3RDaGF0Q29udmVyc2F0aW9uc1JlcXVlc3QidAodTGlzdENoYXRDb252ZXJzYXRpb25zUmVzcG9uc2USNQoNY29udmVyc2F0aW9ucxgBIAMoCzIeLm1lbW9zLmFwaS52MS5DaGF0Q29udmVyc2F0aW9uEhwKFGdlbmVyYXRpb25fYXZhaWxhYmxlGAIgASgIIi8KGkdldENoYXRDb252ZXJzYXRpb25SZXF1ZXN0EhEKBG5hbWUYASABKAlCA+BBAiIyCh1EZWxldGVDaGF0Q29udmVyc2F0aW9uUmVxdWVzdBIRCgRuYW1lGAEgASgJQgPgQQIiYgoWU2VuZENoYXRNZXNzYWdlUmVxdWVzdBIUCgdjb250ZW50GAEgASgJQgPgQQISGQoMY29udmVyc2F0aW9uGAIgASgJQgPgQQISFwoKcmVxdWVzdF9pZBgDIAEoCUID4EECIpQBChRTZW5kQ2hhdE1lc3NhZ2VFdmVudBIzCgVzdGFydBgBIAEoCzIiLm1lbW9zLmFwaS52MS5TZW5kQ2hhdE1lc3NhZ2VTdGFydEgAEg8KBWRlbHRhGAIgASgJSAASLQoIY29tcGxldGUYAyABKAsyGS5tZW1vcy5hcGkudjEuQ2hhdE1lc3NhZ2VIAEIHCgVldmVudCJ9ChRTZW5kQ2hhdE1lc3NhZ2VTdGFydBIvCgx1c2VyX21lc3NhZ2UYASABKAsyGS5tZW1vcy5hcGkudjEuQ2hhdE1lc3NhZ2USNAoRYXNzaXN0YW50X21lc3NhZ2UYAiABKAsyGS5tZW1vcy5hcGkudjEuQ2hhdE1lc3NhZ2Uy4gYKCUFJU2VydmljZRJ5CgpUcmFuc2NyaWJlEh8ubWVtb3MuYXBpLnYxLlRyYW5zY3JpYmVSZXF1ZXN0GiAubWVtb3MuYXBpLnYxLlRyYW5zY3JpYmVSZXNwb25zZSIo2kEFYXVkaW+C0+STAho6ASoiFS9hcGkvdjEvYWk6dHJhbnNjcmliZRKSAQoWQ3JlYXRlQ2hhdENvbnZlcnNhdGlvbhIrLm1lbW9zLmFwaS52MS5DcmVhdGVDaGF0Q29udmVyc2F0aW9uUmVxdWVzdBoeLm1lbW9zLmFwaS52MS5DaGF0Q29udmVyc2F0aW9uIivaQQCC0+STAiI6ASoiHS9hcGkvdjEvYWkvY2hhdC9jb252ZXJzYXRpb25zEpoBChVMaXN0Q2hhdENvbnZlcnNhdGlvbnMSKi5tZW1vcy5hcGkudjEuTGlzdENoYXRDb252ZXJzYXRpb25zUmVxdWVzdBorLm1lbW9zLmFwaS52MS5MaXN0Q2hhdENvbnZlcnNhdGlvbnNSZXNwb25zZSIo2kEAgtPkkwIfEh0vYXBpL3YxL2FpL2NoYXQvY29udmVyc2F0aW9ucxKRAQoTR2V0Q2hhdENvbnZlcnNhdGlvbhIoLm1lbW9zLmFwaS52MS5HZXRDaGF0Q29udmVyc2F0aW9uUmVxdWVzdBoeLm1lbW9zLmFwaS52MS5DaGF0Q29udmVyc2F0aW9uIjDaQQRuYW1lgtPkkwIjEiEvYXBpL3YxL3tuYW1lPWFpL2NvbnZlcnNhdGlvbnMvKn0SjwEKFkRlbGV0ZUNoYXRDb252ZXJzYXRpb24SKy5tZW1vcy5hcGkudjEuRGVsZXRlQ2hhdENvbnZlcnNhdGlvblJlcXVlc3QaFi5nb29nbGUucHJvdG9idWYuRW1wdHkiMNpBBG5hbWWC0+STAiMqIS9hcGkvdjEve25hbWU9YWkvY29udmVyc2F0aW9ucy8qfRKBAQoPU2VuZENoYXRNZXNzYWdlEiQubWVtb3MuYXBpLnYxLlNlbmRDaGF0TWVzc2FnZVJlcXVlc3QaIi5tZW1vcy5hcGkudjEuU2VuZENoYXRNZXNzYWdlRXZlbnQiItpBH2NvbnZlcnNhdGlvbixjb250ZW50LHJlcXVlc3RfaWQwAUKmAQoQY29tLm1lbW9zLmFwaS52MUIOQWlTZXJ2aWNlUHJvdG9QAVowZ2l0aHViLmNvbS91c2VtZW1vcy9tZW1vcy9wcm90by9nZW4vYXBpL3YxO2FwaXYxogIDTUFYqgIMTWVtb3MuQXBpLlYxygIMTWVtb3NcQXBpXFYx4gIYTWVtb3NcQXBpXFYxXEdQQk1ldGFkYXRh6gIOTWVtb3M6OkFwaTo6VjFiBnByb3RvMw", [file_google_api_annotations, file_google_api_client, file_google_api_field_behavior, file_google_protobuf_empty, file_google_protobuf_timestamp]);
+  fileDesc("ChdhcGkvdjEvYWlfc2VydmljZS5wcm90bxIMbWVtb3MuYXBpLnYxIkkKEVRyYW5zY3JpYmVSZXF1ZXN0EjQKBWF1ZGlvGAEgASgLMiAubWVtb3MuYXBpLnYxLlRyYW5zY3JpcHRpb25BdWRpb0ID4EECIncKElRyYW5zY3JpcHRpb25BdWRpbxIWCgdjb250ZW50GAEgASgMQgPgQQRIABINCgN1cmkYAiABKAlIABIVCghmaWxlbmFtZRgDIAEoCUID4EEBEhkKDGNvbnRlbnRfdHlwZRgEIAEoCUID4EEBQggKBnNvdXJjZSIiChJUcmFuc2NyaWJlUmVzcG9uc2USDAoEdGV4dBgBIAEoCSK2AwoLQ2hhdE1lc3NhZ2USLAoEcm9sZRgBIAEoDjIeLm1lbW9zLmFwaS52MS5DaGF0TWVzc2FnZS5Sb2xlEg8KB2NvbnRlbnQYAiABKAkSLwoLY3JlYXRlX3RpbWUYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi0KCWNpdGF0aW9ucxgEIAMoCzIaLm1lbW9zLmFwaS52MS5DaGF0Q2l0YXRpb24SMAoGc3RhdHVzGAUgASgOMiAubWVtb3MuYXBpLnYxLkNoYXRNZXNzYWdlLlN0YXR1cxIPCgdhdHRlbXB0GAYgASgFEhkKEWNsaWVudF9yZXF1ZXN0X2lkGAcgASgJEhkKEXJldHJpZXZhbF9yZWFzb25zGAggAygJIjUKBFJvbGUSFAoQUk9MRV9VTlNQRUNJRklFRBAAEggKBFVTRVIQARINCglBU1NJU1RBTlQQAiJYCgZTdGF0dXMSFgoSU1RBVFVTX1VOU1BFQ0lGSUVEEAASDQoJU1RSRUFNSU5HEAESDAoIQ09NUExFVEUQAhIKCgZGQUlMRUQQAxINCglDQU5DRUxMRUQQBCKhAQoMQ2hhdENpdGF0aW9uEgwKBG1lbW8YASABKAkSDwoHc25pcHBldBgCIAEoCRIzCg9zb3VyY2VfcmV2aXNpb24YAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhMKC3NvdXJjZV9oYXNoGAQgASgJEhQKDHNvdXJjZV9zdGFydBgFIAEoBRISCgpzb3VyY2VfZW5kGAYgASgFItwBChBDaGF0Q29udmVyc2F0aW9uEisKCG1lc3NhZ2VzGAEgAygLMhkubWVtb3MuYXBpLnYxLkNoYXRNZXNzYWdlEhwKFGdlbmVyYXRpb25fYXZhaWxhYmxlGAIgASgIEgwKBG5hbWUYAyABKAkSDQoFdGl0bGUYBCABKAkSLwoLY3JlYXRlX3RpbWUYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi8KC3VwZGF0ZV90aW1lGAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIzCh1DcmVhdGVDaGF0Q29udmVyc2F0aW9uUmVxdWVzdBISCgV0aXRsZRgBIAEoCUID4EEBIh4KHExpc3RDaGF0Q29udmVyc2F0aW9uc1JlcXVlc3QidAodTGlzdENoYXRDb252ZXJzYXRpb25zUmVzcG9uc2USNQoNY29udmVyc2F0aW9ucxgBIAMoCzIeLm1lbW9zLmFwaS52MS5DaGF0Q29udmVyc2F0aW9uEhwKFGdlbmVyYXRpb25fYXZhaWxhYmxlGAIgASgIIi8KGkdldENoYXRDb252ZXJzYXRpb25SZXF1ZXN0EhEKBG5hbWUYASABKAlCA+BBAiIyCh1EZWxldGVDaGF0Q29udmVyc2F0aW9uUmVxdWVzdBIRCgRuYW1lGAEgASgJQgPgQQIiYgoWU2VuZENoYXRNZXNzYWdlUmVxdWVzdBIUCgdjb250ZW50GAEgASgJQgPgQQISGQoMY29udmVyc2F0aW9uGAIgASgJQgPgQQISFwoKcmVxdWVzdF9pZBgDIAEoCUID4EECIpQBChRTZW5kQ2hhdE1lc3NhZ2VFdmVudBIzCgVzdGFydBgBIAEoCzIiLm1lbW9zLmFwaS52MS5TZW5kQ2hhdE1lc3NhZ2VTdGFydEgAEg8KBWRlbHRhGAIgASgJSAASLQoIY29tcGxldGUYAyABKAsyGS5tZW1vcy5hcGkudjEuQ2hhdE1lc3NhZ2VIAEIHCgVldmVudCJ9ChRTZW5kQ2hhdE1lc3NhZ2VTdGFydBIvCgx1c2VyX21lc3NhZ2UYASABKAsyGS5tZW1vcy5hcGkudjEuQ2hhdE1lc3NhZ2USNAoRYXNzaXN0YW50X21lc3NhZ2UYAiABKAsyGS5tZW1vcy5hcGkudjEuQ2hhdE1lc3NhZ2UiXgoSU2VhcmNoTWVtb3NSZXF1ZXN0EhIKBXF1ZXJ5GAEgASgJQgPgQQISNAoGZmlsdGVyGAIgASgLMh8ubWVtb3MuYXBpLnYxLlNlYXJjaE1lbW9zRmlsdGVyQgPgQQEi4AEKEVNlYXJjaE1lbW9zRmlsdGVyEhEKBHRhZ3MYASADKAlCA+BBARI2Cg1jcmVhdGVkX2FmdGVyGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEID4EEBEjcKDmNyZWF0ZWRfYmVmb3JlGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEID4EEBEjEKCnZpc2liaWxpdHkYBCABKA4yGC5tZW1vcy5hcGkudjEuVmlzaWJpbGl0eUID4EEBEhQKB2NyZWF0b3IYBSABKAlCA+BBASK7AQoQTWVtb1NlYXJjaFJlc3VsdBIMCgRtZW1vGAEgASgJEg8KB3NuaXBwZXQYAiABKAkSFAoMcmFua19yZWFzb25zGAMgAygJEjMKD3NvdXJjZV9yZXZpc2lvbhgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEwoLc291cmNlX2hhc2gYBSABKAkSFAoMc291cmNlX3N0YXJ0GAYgASgFEhIKCnNvdXJjZV9lbmQYByABKAUiXwoTU2VhcmNoTWVtb3NSZXNwb25zZRIvCgdyZXN1bHRzGAEgAygLMh4ubWVtb3MuYXBpLnYxLk1lbW9TZWFyY2hSZXN1bHQSFwoPcGFydGlhbF9yZWFzb25zGAIgAygJMuIHCglBSVNlcnZpY2USeQoKVHJhbnNjcmliZRIfLm1lbW9zLmFwaS52MS5UcmFuc2NyaWJlUmVxdWVzdBogLm1lbW9zLmFwaS52MS5UcmFuc2NyaWJlUmVzcG9uc2UiKNpBBWF1ZGlvgtPkkwIaOgEqIhUvYXBpL3YxL2FpOnRyYW5zY3JpYmUSkgEKFkNyZWF0ZUNoYXRDb252ZXJzYXRpb24SKy5tZW1vcy5hcGkudjEuQ3JlYXRlQ2hhdENvbnZlcnNhdGlvblJlcXVlc3QaHi5tZW1vcy5hcGkudjEuQ2hhdENvbnZlcnNhdGlvbiIr2kEAgtPkkwIiOgEqIh0vYXBpL3YxL2FpL2NoYXQvY29udmVyc2F0aW9ucxKaAQoVTGlzdENoYXRDb252ZXJzYXRpb25zEioubWVtb3MuYXBpLnYxLkxpc3RDaGF0Q29udmVyc2F0aW9uc1JlcXVlc3QaKy5tZW1vcy5hcGkudjEuTGlzdENoYXRDb252ZXJzYXRpb25zUmVzcG9uc2UiKNpBAILT5JMCHxIdL2FwaS92MS9haS9jaGF0L2NvbnZlcnNhdGlvbnMSkQEKE0dldENoYXRDb252ZXJzYXRpb24SKC5tZW1vcy5hcGkudjEuR2V0Q2hhdENvbnZlcnNhdGlvblJlcXVlc3QaHi5tZW1vcy5hcGkudjEuQ2hhdENvbnZlcnNhdGlvbiIw2kEEbmFtZYLT5JMCIxIhL2FwaS92MS97bmFtZT1haS9jb252ZXJzYXRpb25zLyp9Eo8BChZEZWxldGVDaGF0Q29udmVyc2F0aW9uEisubWVtb3MuYXBpLnYxLkRlbGV0ZUNoYXRDb252ZXJzYXRpb25SZXF1ZXN0GhYuZ29vZ2xlLnByb3RvYnVmLkVtcHR5IjDaQQRuYW1lgtPkkwIjKiEvYXBpL3YxL3tuYW1lPWFpL2NvbnZlcnNhdGlvbnMvKn0SgQEKD1NlbmRDaGF0TWVzc2FnZRIkLm1lbW9zLmFwaS52MS5TZW5kQ2hhdE1lc3NhZ2VSZXF1ZXN0GiIubWVtb3MuYXBpLnYxLlNlbmRDaGF0TWVzc2FnZUV2ZW50IiLaQR9jb252ZXJzYXRpb24sY29udGVudCxyZXF1ZXN0X2lkMAESfgoLU2VhcmNoTWVtb3MSIC5tZW1vcy5hcGkudjEuU2VhcmNoTWVtb3NSZXF1ZXN0GiEubWVtb3MuYXBpLnYxLlNlYXJjaE1lbW9zUmVzcG9uc2UiKtpBBXF1ZXJ5gtPkkwIcOgEqIhcvYXBpL3YxL2FpL3NlYXJjaC9tZW1vc0KmAQoQY29tLm1lbW9zLmFwaS52MUIOQWlTZXJ2aWNlUHJvdG9QAVowZ2l0aHViLmNvbS91c2VtZW1vcy9tZW1vcy9wcm90by9nZW4vYXBpL3YxO2FwaXYxogIDTUFYqgIMTWVtb3MuQXBpLlYxygIMTWVtb3NcQXBpXFYx4gIYTWVtb3NcQXBpXFYxXEdQQk1ldGFkYXRh6gIOTWVtb3M6OkFwaTo6VjFiBnByb3RvMw", [file_api_v1_memo_service, file_google_api_annotations, file_google_api_client, file_google_api_field_behavior, file_google_protobuf_empty, file_google_protobuf_timestamp]);
 
 /**
  * @generated from message memos.api.v1.TranscribeRequest
@@ -158,6 +160,15 @@ export type ChatMessage = Message<"memos.api.v1.ChatMessage"> & {
    * @generated from field: string client_request_id = 7;
    */
   clientRequestId: string;
+
+  /**
+   * Machine-readable partial/degraded reasons from the retrieval phase, such
+   * as "time_budget_exhausted"; empty means retrieval covered the searchable
+   * corpus completely. Only set on assistant messages.
+   *
+   * @generated from field: repeated string retrieval_reasons = 8;
+   */
+  retrievalReasons: string[];
 };
 
 /**
@@ -265,6 +276,33 @@ export type ChatCitation = Message<"memos.api.v1.ChatCitation"> & {
    * @generated from field: string snippet = 2;
    */
   snippet: string;
+
+  /**
+   * The revision (update time) of the source memo the snippet was quoted
+   * from.
+   *
+   * @generated from field: google.protobuf.Timestamp source_revision = 3;
+   */
+  sourceRevision?: Timestamp | undefined;
+
+  /**
+   * The hash of the source content the snippet was quoted from.
+   *
+   * @generated from field: string source_hash = 4;
+   */
+  sourceHash: string;
+
+  /**
+   * The byte range of the quoted snippet within the source content.
+   *
+   * @generated from field: int32 source_start = 5;
+   */
+  sourceStart: number;
+
+  /**
+   * @generated from field: int32 source_end = 6;
+   */
+  sourceEnd: number;
 };
 
 /**
@@ -549,6 +587,178 @@ export const SendChatMessageStartSchema: GenMessage<SendChatMessageStart> = /*@_
   messageDesc(file_api_v1_ai_service, 13);
 
 /**
+ * @generated from message memos.api.v1.SearchMemosRequest
+ */
+export type SearchMemosRequest = Message<"memos.api.v1.SearchMemosRequest"> & {
+  /**
+   * Required. The free-text query, matched exactly, partially, and with typo
+   * tolerance against normalized memo titles, tags, and content.
+   *
+   * @generated from field: string query = 1;
+   */
+  query: string;
+
+  /**
+   * Optional. Structured filters narrowing the search candidates.
+   *
+   * @generated from field: memos.api.v1.SearchMemosFilter filter = 2;
+   */
+  filter?: SearchMemosFilter | undefined;
+};
+
+/**
+ * Describes the message memos.api.v1.SearchMemosRequest.
+ * Use `create(SearchMemosRequestSchema)` to create a new message.
+ */
+export const SearchMemosRequestSchema: GenMessage<SearchMemosRequest> = /*@__PURE__*/
+  messageDesc(file_api_v1_ai_service, 14);
+
+/**
+ * SearchMemosFilter narrows search candidates by structured product intent.
+ * All set fields must hold for a memo to appear in the results.
+ *
+ * @generated from message memos.api.v1.SearchMemosFilter
+ */
+export type SearchMemosFilter = Message<"memos.api.v1.SearchMemosFilter"> & {
+  /**
+   * Optional. Memos must carry all of these tags.
+   *
+   * @generated from field: repeated string tags = 1;
+   */
+  tags: string[];
+
+  /**
+   * Optional. Memos must be created at or after this time.
+   *
+   * @generated from field: google.protobuf.Timestamp created_after = 2;
+   */
+  createdAfter?: Timestamp | undefined;
+
+  /**
+   * Optional. Memos must be created at or before this time.
+   *
+   * @generated from field: google.protobuf.Timestamp created_before = 3;
+   */
+  createdBefore?: Timestamp | undefined;
+
+  /**
+   * Optional. Memos must have exactly this visibility.
+   *
+   * @generated from field: memos.api.v1.Visibility visibility = 4;
+   */
+  visibility: Visibility;
+
+  /**
+   * Optional. Memos must be created by this user.
+   * Format: users/{user_id}
+   *
+   * @generated from field: string creator = 5;
+   */
+  creator: string;
+};
+
+/**
+ * Describes the message memos.api.v1.SearchMemosFilter.
+ * Use `create(SearchMemosFilterSchema)` to create a new message.
+ */
+export const SearchMemosFilterSchema: GenMessage<SearchMemosFilter> = /*@__PURE__*/
+  messageDesc(file_api_v1_ai_service, 15);
+
+/**
+ * MemoSearchResult is one memo matching a search query. The snippet is quoted
+ * from the memo's current source after reauthorization and revision checking;
+ * it can never carry stale indexed text.
+ *
+ * @generated from message memos.api.v1.MemoSearchResult
+ */
+export type MemoSearchResult = Message<"memos.api.v1.MemoSearchResult"> & {
+  /**
+   * The resource name of the matching memo.
+   * Format: memos/{memo}
+   *
+   * @generated from field: string memo = 1;
+   */
+  memo: string;
+
+  /**
+   * The quoted source text around the strongest match.
+   *
+   * @generated from field: string snippet = 2;
+   */
+  snippet: string;
+
+  /**
+   * Machine-readable reasons the result ranked, such as "title_exact" or
+   * "content_fuzzy".
+   *
+   * @generated from field: repeated string rank_reasons = 3;
+   */
+  rankReasons: string[];
+
+  /**
+   * The revision (update time) of the source memo the snippet was quoted
+   * from.
+   *
+   * @generated from field: google.protobuf.Timestamp source_revision = 4;
+   */
+  sourceRevision?: Timestamp | undefined;
+
+  /**
+   * The hash of the source content the snippet was quoted from.
+   *
+   * @generated from field: string source_hash = 5;
+   */
+  sourceHash: string;
+
+  /**
+   * The byte range of the quoted snippet within the source content.
+   *
+   * @generated from field: int32 source_start = 6;
+   */
+  sourceStart: number;
+
+  /**
+   * @generated from field: int32 source_end = 7;
+   */
+  sourceEnd: number;
+};
+
+/**
+ * Describes the message memos.api.v1.MemoSearchResult.
+ * Use `create(MemoSearchResultSchema)` to create a new message.
+ */
+export const MemoSearchResultSchema: GenMessage<MemoSearchResult> = /*@__PURE__*/
+  messageDesc(file_api_v1_ai_service, 16);
+
+/**
+ * @generated from message memos.api.v1.SearchMemosResponse
+ */
+export type SearchMemosResponse = Message<"memos.api.v1.SearchMemosResponse"> & {
+  /**
+   * The ranked results, best first.
+   *
+   * @generated from field: repeated memos.api.v1.MemoSearchResult results = 1;
+   */
+  results: MemoSearchResult[];
+
+  /**
+   * Machine-readable reasons the coverage is partial or degraded, such as
+   * "scan_budget_exhausted". Empty means the searchable corpus was covered
+   * completely; partial coverage is never presented as complete.
+   *
+   * @generated from field: repeated string partial_reasons = 2;
+   */
+  partialReasons: string[];
+};
+
+/**
+ * Describes the message memos.api.v1.SearchMemosResponse.
+ * Use `create(SearchMemosResponseSchema)` to create a new message.
+ */
+export const SearchMemosResponseSchema: GenMessage<SearchMemosResponse> = /*@__PURE__*/
+  messageDesc(file_api_v1_ai_service, 17);
+
+/**
  * @generated from service memos.api.v1.AIService
  */
 export const AIService: GenService<{
@@ -621,6 +831,20 @@ export const AIService: GenService<{
     methodKind: "server_streaming";
     input: typeof SendChatMessageRequestSchema;
     output: typeof SendChatMessageEventSchema;
+  },
+  /**
+   * SearchMemos searches the memos the caller may read with exact, partial,
+   * and typo-tolerant matching over the derived search documents. Every
+   * result is reauthorized and revision-checked against the current source
+   * memo before its snippet is returned. Search works with no generation or
+   * embedding configuration.
+   *
+   * @generated from rpc memos.api.v1.AIService.SearchMemos
+   */
+  searchMemos: {
+    methodKind: "unary";
+    input: typeof SearchMemosRequestSchema;
+    output: typeof SearchMemosResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_api_v1_ai_service, 0);

@@ -49,6 +49,7 @@ const userMessage = (overrides: Record<string, unknown> = {}) => ({
   status: ChatMessage_Status.COMPLETE,
   clientRequestId: "req-1",
   citations: [],
+  retrievalReasons: [],
   ...overrides,
 });
 
@@ -58,6 +59,7 @@ const assistantMessage = (overrides: Record<string, unknown> = {}) => ({
   status: ChatMessage_Status.STREAMING,
   attempt: 1,
   citations: [],
+  retrievalReasons: [],
   ...overrides,
 });
 

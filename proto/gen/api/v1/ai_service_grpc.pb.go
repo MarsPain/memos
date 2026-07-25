@@ -26,6 +26,7 @@ const (
 	AIService_GetChatConversation_FullMethodName    = "/memos.api.v1.AIService/GetChatConversation"
 	AIService_DeleteChatConversation_FullMethodName = "/memos.api.v1.AIService/DeleteChatConversation"
 	AIService_SendChatMessage_FullMethodName        = "/memos.api.v1.AIService/SendChatMessage"
+	AIService_SearchMemos_FullMethodName            = "/memos.api.v1.AIService/SearchMemos"
 )
 
 // AIServiceClient is the client API for AIService service.
@@ -54,6 +55,12 @@ type AIServiceClient interface {
 	// Server streaming is served over the Connect endpoint only; the
 	// gRPC-Gateway JSON transport does not support streaming methods.
 	SendChatMessage(ctx context.Context, in *SendChatMessageRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SendChatMessageEvent], error)
+	// SearchMemos searches the memos the caller may read with exact, partial,
+	// and typo-tolerant matching over the derived search documents. Every
+	// result is reauthorized and revision-checked against the current source
+	// memo before its snippet is returned. Search works with no generation or
+	// embedding configuration.
+	SearchMemos(ctx context.Context, in *SearchMemosRequest, opts ...grpc.CallOption) (*SearchMemosResponse, error)
 }
 
 type aIServiceClient struct {
@@ -133,6 +140,16 @@ func (c *aIServiceClient) SendChatMessage(ctx context.Context, in *SendChatMessa
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AIService_SendChatMessageClient = grpc.ServerStreamingClient[SendChatMessageEvent]
 
+func (c *aIServiceClient) SearchMemos(ctx context.Context, in *SearchMemosRequest, opts ...grpc.CallOption) (*SearchMemosResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SearchMemosResponse)
+	err := c.cc.Invoke(ctx, AIService_SearchMemos_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AIServiceServer is the server API for AIService service.
 // All implementations must embed UnimplementedAIServiceServer
 // for forward compatibility.
@@ -159,6 +176,12 @@ type AIServiceServer interface {
 	// Server streaming is served over the Connect endpoint only; the
 	// gRPC-Gateway JSON transport does not support streaming methods.
 	SendChatMessage(*SendChatMessageRequest, grpc.ServerStreamingServer[SendChatMessageEvent]) error
+	// SearchMemos searches the memos the caller may read with exact, partial,
+	// and typo-tolerant matching over the derived search documents. Every
+	// result is reauthorized and revision-checked against the current source
+	// memo before its snippet is returned. Search works with no generation or
+	// embedding configuration.
+	SearchMemos(context.Context, *SearchMemosRequest) (*SearchMemosResponse, error)
 	mustEmbedUnimplementedAIServiceServer()
 }
 
@@ -186,6 +209,9 @@ func (UnimplementedAIServiceServer) DeleteChatConversation(context.Context, *Del
 }
 func (UnimplementedAIServiceServer) SendChatMessage(*SendChatMessageRequest, grpc.ServerStreamingServer[SendChatMessageEvent]) error {
 	return status.Error(codes.Unimplemented, "method SendChatMessage not implemented")
+}
+func (UnimplementedAIServiceServer) SearchMemos(context.Context, *SearchMemosRequest) (*SearchMemosResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SearchMemos not implemented")
 }
 func (UnimplementedAIServiceServer) mustEmbedUnimplementedAIServiceServer() {}
 func (UnimplementedAIServiceServer) testEmbeddedByValue()                   {}
@@ -309,6 +335,24 @@ func _AIService_SendChatMessage_Handler(srv interface{}, stream grpc.ServerStrea
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AIService_SendChatMessageServer = grpc.ServerStreamingServer[SendChatMessageEvent]
 
+func _AIService_SearchMemos_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchMemosRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AIServiceServer).SearchMemos(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AIService_SearchMemos_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AIServiceServer).SearchMemos(ctx, req.(*SearchMemosRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AIService_ServiceDesc is the grpc.ServiceDesc for AIService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -335,6 +379,10 @@ var AIService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteChatConversation",
 			Handler:    _AIService_DeleteChatConversation_Handler,
+		},
+		{
+			MethodName: "SearchMemos",
+			Handler:    _AIService_SearchMemos_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

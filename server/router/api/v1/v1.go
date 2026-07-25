@@ -63,6 +63,11 @@ type APIV1Service struct {
 	// same struct-literal reason as aiChat.
 	searchOnce sync.Once
 	search     *search.Service
+
+	// searchRetrieverOnce and searchRetriever lazily build the retrieval
+	// service for the same struct-literal reason as aiChat.
+	searchRetrieverOnce sync.Once
+	searchRetriever     *search.Retriever
 }
 
 func NewAPIV1Service(secret string, profile *profile.Profile, store *store.Store) *APIV1Service {

@@ -26,6 +26,7 @@ func TestAuthorizerCheckAccess(t *testing.T) {
 		bootstrapMethod = "/memos.api.v1.AuthService/SignIn"
 		createUser      = "/memos.api.v1.UserService/CreateUser"
 		shareMethod     = "/memos.api.v1.MemoService/GetMemoByShare"
+		aiSearchMethod  = "/memos.api.v1.AIService/SearchMemos"
 	)
 
 	cases := []struct {
@@ -43,6 +44,8 @@ func TestAuthorizerCheckAccess(t *testing.T) {
 		{"anonymous allowed on bootstrap method, private instance", privateInstance, bootstrapMethod, nil, false},
 		{"anonymous allowed to register on private instance", privateInstance, createUser, nil, false},
 		{"anonymous allowed on share access, private instance", privateInstance, shareMethod, nil, false},
+		{"anonymous denied on AI search, open instance", openInstance, aiSearchMethod, nil, true},
+		{"authenticated reaches AI search", privateInstance, aiSearchMethod, authenticated, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

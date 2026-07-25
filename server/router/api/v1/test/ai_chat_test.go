@@ -131,6 +131,9 @@ func TestSendChatMessage(t *testing.T) {
 			Visibility: store.Public,
 		})
 		require.NoError(t, err)
+		// Chat grounds on the derived search documents; close the index lag
+		// for the memo just written.
+		ts.Service.SearchService().RunOnce(ctx)
 		configureChatGeneration(ctx, t, ts)
 
 		// AIModelFactory is overridden after struct-literal construction; the

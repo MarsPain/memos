@@ -347,8 +347,12 @@ type ChatMessage struct {
 	Attempt int32 `protobuf:"varint,6,opt,name=attempt,proto3" json:"attempt,omitempty"`
 	// The client request ID of a user message; empty for assistant messages.
 	ClientRequestId string `protobuf:"bytes,7,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Machine-readable partial/degraded reasons from the retrieval phase, such
+	// as "time_budget_exhausted"; empty means retrieval covered the searchable
+	// corpus completely. Only set on assistant messages.
+	RetrievalReasons []string `protobuf:"bytes,8,rep,name=retrieval_reasons,json=retrievalReasons,proto3" json:"retrieval_reasons,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ChatMessage) Reset() {
@@ -430,6 +434,13 @@ func (x *ChatMessage) GetClientRequestId() string {
 	return ""
 }
 
+func (x *ChatMessage) GetRetrievalReasons() []string {
+	if x != nil {
+		return x.RetrievalReasons
+	}
+	return nil
+}
+
 // ChatCitation references the memo a chat answer was grounded in.
 type ChatCitation struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -437,7 +448,15 @@ type ChatCitation struct {
 	// Format: memos/{memo}
 	Memo string `protobuf:"bytes,1,opt,name=memo,proto3" json:"memo,omitempty"`
 	// The quoted source text from the memo.
-	Snippet       string `protobuf:"bytes,2,opt,name=snippet,proto3" json:"snippet,omitempty"`
+	Snippet string `protobuf:"bytes,2,opt,name=snippet,proto3" json:"snippet,omitempty"`
+	// The revision (update time) of the source memo the snippet was quoted
+	// from.
+	SourceRevision *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
+	// The hash of the source content the snippet was quoted from.
+	SourceHash string `protobuf:"bytes,4,opt,name=source_hash,json=sourceHash,proto3" json:"source_hash,omitempty"`
+	// The byte range of the quoted snippet within the source content.
+	SourceStart   int32 `protobuf:"varint,5,opt,name=source_start,json=sourceStart,proto3" json:"source_start,omitempty"`
+	SourceEnd     int32 `protobuf:"varint,6,opt,name=source_end,json=sourceEnd,proto3" json:"source_end,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -484,6 +503,34 @@ func (x *ChatCitation) GetSnippet() string {
 		return x.Snippet
 	}
 	return ""
+}
+
+func (x *ChatCitation) GetSourceRevision() *timestamppb.Timestamp {
+	if x != nil {
+		return x.SourceRevision
+	}
+	return nil
+}
+
+func (x *ChatCitation) GetSourceHash() string {
+	if x != nil {
+		return x.SourceHash
+	}
+	return ""
+}
+
+func (x *ChatCitation) GetSourceStart() int32 {
+	if x != nil {
+		return x.SourceStart
+	}
+	return 0
+}
+
+func (x *ChatCitation) GetSourceEnd() int32 {
+	if x != nil {
+		return x.SourceEnd
+	}
+	return 0
 }
 
 // ChatConversation is a private AI chat conversation owned by a user.
@@ -1040,11 +1087,310 @@ func (x *SendChatMessageStart) GetAssistantMessage() *ChatMessage {
 	return nil
 }
 
+type SearchMemosRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Required. The free-text query, matched exactly, partially, and with typo
+	// tolerance against normalized memo titles, tags, and content.
+	Query string `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
+	// Optional. Structured filters narrowing the search candidates.
+	Filter        *SearchMemosFilter `protobuf:"bytes,2,opt,name=filter,proto3" json:"filter,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchMemosRequest) Reset() {
+	*x = SearchMemosRequest{}
+	mi := &file_api_v1_ai_service_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchMemosRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchMemosRequest) ProtoMessage() {}
+
+func (x *SearchMemosRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_v1_ai_service_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchMemosRequest.ProtoReflect.Descriptor instead.
+func (*SearchMemosRequest) Descriptor() ([]byte, []int) {
+	return file_api_v1_ai_service_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *SearchMemosRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
+func (x *SearchMemosRequest) GetFilter() *SearchMemosFilter {
+	if x != nil {
+		return x.Filter
+	}
+	return nil
+}
+
+// SearchMemosFilter narrows search candidates by structured product intent.
+// All set fields must hold for a memo to appear in the results.
+type SearchMemosFilter struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Optional. Memos must carry all of these tags.
+	Tags []string `protobuf:"bytes,1,rep,name=tags,proto3" json:"tags,omitempty"`
+	// Optional. Memos must be created at or after this time.
+	CreatedAfter *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=created_after,json=createdAfter,proto3" json:"created_after,omitempty"`
+	// Optional. Memos must be created at or before this time.
+	CreatedBefore *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=created_before,json=createdBefore,proto3" json:"created_before,omitempty"`
+	// Optional. Memos must have exactly this visibility.
+	Visibility Visibility `protobuf:"varint,4,opt,name=visibility,proto3,enum=memos.api.v1.Visibility" json:"visibility,omitempty"`
+	// Optional. Memos must be created by this user.
+	// Format: users/{user_id}
+	Creator       string `protobuf:"bytes,5,opt,name=creator,proto3" json:"creator,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchMemosFilter) Reset() {
+	*x = SearchMemosFilter{}
+	mi := &file_api_v1_ai_service_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchMemosFilter) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchMemosFilter) ProtoMessage() {}
+
+func (x *SearchMemosFilter) ProtoReflect() protoreflect.Message {
+	mi := &file_api_v1_ai_service_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchMemosFilter.ProtoReflect.Descriptor instead.
+func (*SearchMemosFilter) Descriptor() ([]byte, []int) {
+	return file_api_v1_ai_service_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *SearchMemosFilter) GetTags() []string {
+	if x != nil {
+		return x.Tags
+	}
+	return nil
+}
+
+func (x *SearchMemosFilter) GetCreatedAfter() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAfter
+	}
+	return nil
+}
+
+func (x *SearchMemosFilter) GetCreatedBefore() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedBefore
+	}
+	return nil
+}
+
+func (x *SearchMemosFilter) GetVisibility() Visibility {
+	if x != nil {
+		return x.Visibility
+	}
+	return Visibility_VISIBILITY_UNSPECIFIED
+}
+
+func (x *SearchMemosFilter) GetCreator() string {
+	if x != nil {
+		return x.Creator
+	}
+	return ""
+}
+
+// MemoSearchResult is one memo matching a search query. The snippet is quoted
+// from the memo's current source after reauthorization and revision checking;
+// it can never carry stale indexed text.
+type MemoSearchResult struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The resource name of the matching memo.
+	// Format: memos/{memo}
+	Memo string `protobuf:"bytes,1,opt,name=memo,proto3" json:"memo,omitempty"`
+	// The quoted source text around the strongest match.
+	Snippet string `protobuf:"bytes,2,opt,name=snippet,proto3" json:"snippet,omitempty"`
+	// Machine-readable reasons the result ranked, such as "title_exact" or
+	// "content_fuzzy".
+	RankReasons []string `protobuf:"bytes,3,rep,name=rank_reasons,json=rankReasons,proto3" json:"rank_reasons,omitempty"`
+	// The revision (update time) of the source memo the snippet was quoted
+	// from.
+	SourceRevision *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
+	// The hash of the source content the snippet was quoted from.
+	SourceHash string `protobuf:"bytes,5,opt,name=source_hash,json=sourceHash,proto3" json:"source_hash,omitempty"`
+	// The byte range of the quoted snippet within the source content.
+	SourceStart   int32 `protobuf:"varint,6,opt,name=source_start,json=sourceStart,proto3" json:"source_start,omitempty"`
+	SourceEnd     int32 `protobuf:"varint,7,opt,name=source_end,json=sourceEnd,proto3" json:"source_end,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MemoSearchResult) Reset() {
+	*x = MemoSearchResult{}
+	mi := &file_api_v1_ai_service_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MemoSearchResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MemoSearchResult) ProtoMessage() {}
+
+func (x *MemoSearchResult) ProtoReflect() protoreflect.Message {
+	mi := &file_api_v1_ai_service_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MemoSearchResult.ProtoReflect.Descriptor instead.
+func (*MemoSearchResult) Descriptor() ([]byte, []int) {
+	return file_api_v1_ai_service_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *MemoSearchResult) GetMemo() string {
+	if x != nil {
+		return x.Memo
+	}
+	return ""
+}
+
+func (x *MemoSearchResult) GetSnippet() string {
+	if x != nil {
+		return x.Snippet
+	}
+	return ""
+}
+
+func (x *MemoSearchResult) GetRankReasons() []string {
+	if x != nil {
+		return x.RankReasons
+	}
+	return nil
+}
+
+func (x *MemoSearchResult) GetSourceRevision() *timestamppb.Timestamp {
+	if x != nil {
+		return x.SourceRevision
+	}
+	return nil
+}
+
+func (x *MemoSearchResult) GetSourceHash() string {
+	if x != nil {
+		return x.SourceHash
+	}
+	return ""
+}
+
+func (x *MemoSearchResult) GetSourceStart() int32 {
+	if x != nil {
+		return x.SourceStart
+	}
+	return 0
+}
+
+func (x *MemoSearchResult) GetSourceEnd() int32 {
+	if x != nil {
+		return x.SourceEnd
+	}
+	return 0
+}
+
+type SearchMemosResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The ranked results, best first.
+	Results []*MemoSearchResult `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
+	// Machine-readable reasons the coverage is partial or degraded, such as
+	// "scan_budget_exhausted". Empty means the searchable corpus was covered
+	// completely; partial coverage is never presented as complete.
+	PartialReasons []string `protobuf:"bytes,2,rep,name=partial_reasons,json=partialReasons,proto3" json:"partial_reasons,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *SearchMemosResponse) Reset() {
+	*x = SearchMemosResponse{}
+	mi := &file_api_v1_ai_service_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchMemosResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchMemosResponse) ProtoMessage() {}
+
+func (x *SearchMemosResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_v1_ai_service_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchMemosResponse.ProtoReflect.Descriptor instead.
+func (*SearchMemosResponse) Descriptor() ([]byte, []int) {
+	return file_api_v1_ai_service_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *SearchMemosResponse) GetResults() []*MemoSearchResult {
+	if x != nil {
+		return x.Results
+	}
+	return nil
+}
+
+func (x *SearchMemosResponse) GetPartialReasons() []string {
+	if x != nil {
+		return x.PartialReasons
+	}
+	return nil
+}
+
 var File_api_v1_ai_service_proto protoreflect.FileDescriptor
 
 const file_api_v1_ai_service_proto_rawDesc = "" +
 	"\n" +
-	"\x17api/v1/ai_service.proto\x12\fmemos.api.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x17google/api/client.proto\x1a\x1fgoogle/api/field_behavior.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"P\n" +
+	"\x17api/v1/ai_service.proto\x12\fmemos.api.v1\x1a\x19api/v1/memo_service.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x17google/api/client.proto\x1a\x1fgoogle/api/field_behavior.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"P\n" +
 	"\x11TranscribeRequest\x12;\n" +
 	"\x05audio\x18\x01 \x01(\v2 .memos.api.v1.TranscriptionAudioB\x03\xe0A\x02R\x05audio\"\x9c\x01\n" +
 	"\x12TranscriptionAudio\x12\x1f\n" +
@@ -1054,7 +1400,7 @@ const file_api_v1_ai_service_proto_rawDesc = "" +
 	"\fcontent_type\x18\x04 \x01(\tB\x03\xe0A\x01R\vcontentTypeB\b\n" +
 	"\x06source\"(\n" +
 	"\x12TranscribeResponse\x12\x12\n" +
-	"\x04text\x18\x01 \x01(\tR\x04text\"\xe3\x03\n" +
+	"\x04text\x18\x01 \x01(\tR\x04text\"\x90\x04\n" +
 	"\vChatMessage\x122\n" +
 	"\x04role\x18\x01 \x01(\x0e2\x1e.memos.api.v1.ChatMessage.RoleR\x04role\x12\x18\n" +
 	"\acontent\x18\x02 \x01(\tR\acontent\x12;\n" +
@@ -1063,7 +1409,8 @@ const file_api_v1_ai_service_proto_rawDesc = "" +
 	"\tcitations\x18\x04 \x03(\v2\x1a.memos.api.v1.ChatCitationR\tcitations\x128\n" +
 	"\x06status\x18\x05 \x01(\x0e2 .memos.api.v1.ChatMessage.StatusR\x06status\x12\x18\n" +
 	"\aattempt\x18\x06 \x01(\x05R\aattempt\x12*\n" +
-	"\x11client_request_id\x18\a \x01(\tR\x0fclientRequestId\"5\n" +
+	"\x11client_request_id\x18\a \x01(\tR\x0fclientRequestId\x12+\n" +
+	"\x11retrieval_reasons\x18\b \x03(\tR\x10retrievalReasons\"5\n" +
 	"\x04Role\x12\x14\n" +
 	"\x10ROLE_UNSPECIFIED\x10\x00\x12\b\n" +
 	"\x04USER\x10\x01\x12\r\n" +
@@ -1074,10 +1421,16 @@ const file_api_v1_ai_service_proto_rawDesc = "" +
 	"\bCOMPLETE\x10\x02\x12\n" +
 	"\n" +
 	"\x06FAILED\x10\x03\x12\r\n" +
-	"\tCANCELLED\x10\x04\"<\n" +
+	"\tCANCELLED\x10\x04\"\xe4\x01\n" +
 	"\fChatCitation\x12\x12\n" +
 	"\x04memo\x18\x01 \x01(\tR\x04memo\x12\x18\n" +
-	"\asnippet\x18\x02 \x01(\tR\asnippet\"\xa0\x02\n" +
+	"\asnippet\x18\x02 \x01(\tR\asnippet\x12C\n" +
+	"\x0fsource_revision\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x0esourceRevision\x12\x1f\n" +
+	"\vsource_hash\x18\x04 \x01(\tR\n" +
+	"sourceHash\x12!\n" +
+	"\fsource_start\x18\x05 \x01(\x05R\vsourceStart\x12\x1d\n" +
+	"\n" +
+	"source_end\x18\x06 \x01(\x05R\tsourceEnd\"\xa0\x02\n" +
 	"\x10ChatConversation\x125\n" +
 	"\bmessages\x18\x01 \x03(\v2\x19.memos.api.v1.ChatMessageR\bmessages\x121\n" +
 	"\x14generation_available\x18\x02 \x01(\bR\x13generationAvailable\x12\x12\n" +
@@ -1109,7 +1462,31 @@ const file_api_v1_ai_service_proto_rawDesc = "" +
 	"\x05event\"\x9c\x01\n" +
 	"\x14SendChatMessageStart\x12<\n" +
 	"\fuser_message\x18\x01 \x01(\v2\x19.memos.api.v1.ChatMessageR\vuserMessage\x12F\n" +
-	"\x11assistant_message\x18\x02 \x01(\v2\x19.memos.api.v1.ChatMessageR\x10assistantMessage2\xe2\x06\n" +
+	"\x11assistant_message\x18\x02 \x01(\v2\x19.memos.api.v1.ChatMessageR\x10assistantMessage\"m\n" +
+	"\x12SearchMemosRequest\x12\x19\n" +
+	"\x05query\x18\x01 \x01(\tB\x03\xe0A\x02R\x05query\x12<\n" +
+	"\x06filter\x18\x02 \x01(\v2\x1f.memos.api.v1.SearchMemosFilterB\x03\xe0A\x01R\x06filter\"\x98\x02\n" +
+	"\x11SearchMemosFilter\x12\x17\n" +
+	"\x04tags\x18\x01 \x03(\tB\x03\xe0A\x01R\x04tags\x12D\n" +
+	"\rcreated_after\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampB\x03\xe0A\x01R\fcreatedAfter\x12F\n" +
+	"\x0ecreated_before\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampB\x03\xe0A\x01R\rcreatedBefore\x12=\n" +
+	"\n" +
+	"visibility\x18\x04 \x01(\x0e2\x18.memos.api.v1.VisibilityB\x03\xe0A\x01R\n" +
+	"visibility\x12\x1d\n" +
+	"\acreator\x18\x05 \x01(\tB\x03\xe0A\x01R\acreator\"\x8b\x02\n" +
+	"\x10MemoSearchResult\x12\x12\n" +
+	"\x04memo\x18\x01 \x01(\tR\x04memo\x12\x18\n" +
+	"\asnippet\x18\x02 \x01(\tR\asnippet\x12!\n" +
+	"\frank_reasons\x18\x03 \x03(\tR\vrankReasons\x12C\n" +
+	"\x0fsource_revision\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x0esourceRevision\x12\x1f\n" +
+	"\vsource_hash\x18\x05 \x01(\tR\n" +
+	"sourceHash\x12!\n" +
+	"\fsource_start\x18\x06 \x01(\x05R\vsourceStart\x12\x1d\n" +
+	"\n" +
+	"source_end\x18\a \x01(\x05R\tsourceEnd\"x\n" +
+	"\x13SearchMemosResponse\x128\n" +
+	"\aresults\x18\x01 \x03(\v2\x1e.memos.api.v1.MemoSearchResultR\aresults\x12'\n" +
+	"\x0fpartial_reasons\x18\x02 \x03(\tR\x0epartialReasons2\xe2\a\n" +
 	"\tAIService\x12y\n" +
 	"\n" +
 	"Transcribe\x12\x1f.memos.api.v1.TranscribeRequest\x1a .memos.api.v1.TranscribeResponse\"(\xdaA\x05audio\x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api/v1/ai:transcribe\x12\x92\x01\n" +
@@ -1117,7 +1494,8 @@ const file_api_v1_ai_service_proto_rawDesc = "" +
 	"\x15ListChatConversations\x12*.memos.api.v1.ListChatConversationsRequest\x1a+.memos.api.v1.ListChatConversationsResponse\"(\xdaA\x00\x82\xd3\xe4\x93\x02\x1f\x12\x1d/api/v1/ai/chat/conversations\x12\x91\x01\n" +
 	"\x13GetChatConversation\x12(.memos.api.v1.GetChatConversationRequest\x1a\x1e.memos.api.v1.ChatConversation\"0\xdaA\x04name\x82\xd3\xe4\x93\x02#\x12!/api/v1/{name=ai/conversations/*}\x12\x8f\x01\n" +
 	"\x16DeleteChatConversation\x12+.memos.api.v1.DeleteChatConversationRequest\x1a\x16.google.protobuf.Empty\"0\xdaA\x04name\x82\xd3\xe4\x93\x02#*!/api/v1/{name=ai/conversations/*}\x12\x81\x01\n" +
-	"\x0fSendChatMessage\x12$.memos.api.v1.SendChatMessageRequest\x1a\".memos.api.v1.SendChatMessageEvent\"\"\xdaA\x1fconversation,content,request_id0\x01B\xa6\x01\n" +
+	"\x0fSendChatMessage\x12$.memos.api.v1.SendChatMessageRequest\x1a\".memos.api.v1.SendChatMessageEvent\"\"\xdaA\x1fconversation,content,request_id0\x01\x12~\n" +
+	"\vSearchMemos\x12 .memos.api.v1.SearchMemosRequest\x1a!.memos.api.v1.SearchMemosResponse\"*\xdaA\x05query\x82\xd3\xe4\x93\x02\x1c:\x01*\"\x17/api/v1/ai/search/memosB\xa6\x01\n" +
 	"\x10com.memos.api.v1B\x0eAiServiceProtoP\x01Z0github.com/usememos/memos/proto/gen/api/v1;apiv1\xa2\x02\x03MAX\xaa\x02\fMemos.Api.V1\xca\x02\fMemos\\Api\\V1\xe2\x02\x18Memos\\Api\\V1\\GPBMetadata\xea\x02\x0eMemos::Api::V1b\x06proto3"
 
 var (
@@ -1133,7 +1511,7 @@ func file_api_v1_ai_service_proto_rawDescGZIP() []byte {
 }
 
 var file_api_v1_ai_service_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_api_v1_ai_service_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_api_v1_ai_service_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_api_v1_ai_service_proto_goTypes = []any{
 	(ChatMessage_Role)(0),                 // 0: memos.api.v1.ChatMessage.Role
 	(ChatMessage_Status)(0),               // 1: memos.api.v1.ChatMessage.Status
@@ -1151,40 +1529,54 @@ var file_api_v1_ai_service_proto_goTypes = []any{
 	(*SendChatMessageRequest)(nil),        // 13: memos.api.v1.SendChatMessageRequest
 	(*SendChatMessageEvent)(nil),          // 14: memos.api.v1.SendChatMessageEvent
 	(*SendChatMessageStart)(nil),          // 15: memos.api.v1.SendChatMessageStart
-	(*timestamppb.Timestamp)(nil),         // 16: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),                 // 17: google.protobuf.Empty
+	(*SearchMemosRequest)(nil),            // 16: memos.api.v1.SearchMemosRequest
+	(*SearchMemosFilter)(nil),             // 17: memos.api.v1.SearchMemosFilter
+	(*MemoSearchResult)(nil),              // 18: memos.api.v1.MemoSearchResult
+	(*SearchMemosResponse)(nil),           // 19: memos.api.v1.SearchMemosResponse
+	(*timestamppb.Timestamp)(nil),         // 20: google.protobuf.Timestamp
+	(Visibility)(0),                       // 21: memos.api.v1.Visibility
+	(*emptypb.Empty)(nil),                 // 22: google.protobuf.Empty
 }
 var file_api_v1_ai_service_proto_depIdxs = []int32{
 	3,  // 0: memos.api.v1.TranscribeRequest.audio:type_name -> memos.api.v1.TranscriptionAudio
 	0,  // 1: memos.api.v1.ChatMessage.role:type_name -> memos.api.v1.ChatMessage.Role
-	16, // 2: memos.api.v1.ChatMessage.create_time:type_name -> google.protobuf.Timestamp
+	20, // 2: memos.api.v1.ChatMessage.create_time:type_name -> google.protobuf.Timestamp
 	6,  // 3: memos.api.v1.ChatMessage.citations:type_name -> memos.api.v1.ChatCitation
 	1,  // 4: memos.api.v1.ChatMessage.status:type_name -> memos.api.v1.ChatMessage.Status
-	5,  // 5: memos.api.v1.ChatConversation.messages:type_name -> memos.api.v1.ChatMessage
-	16, // 6: memos.api.v1.ChatConversation.create_time:type_name -> google.protobuf.Timestamp
-	16, // 7: memos.api.v1.ChatConversation.update_time:type_name -> google.protobuf.Timestamp
-	7,  // 8: memos.api.v1.ListChatConversationsResponse.conversations:type_name -> memos.api.v1.ChatConversation
-	15, // 9: memos.api.v1.SendChatMessageEvent.start:type_name -> memos.api.v1.SendChatMessageStart
-	5,  // 10: memos.api.v1.SendChatMessageEvent.complete:type_name -> memos.api.v1.ChatMessage
-	5,  // 11: memos.api.v1.SendChatMessageStart.user_message:type_name -> memos.api.v1.ChatMessage
-	5,  // 12: memos.api.v1.SendChatMessageStart.assistant_message:type_name -> memos.api.v1.ChatMessage
-	2,  // 13: memos.api.v1.AIService.Transcribe:input_type -> memos.api.v1.TranscribeRequest
-	8,  // 14: memos.api.v1.AIService.CreateChatConversation:input_type -> memos.api.v1.CreateChatConversationRequest
-	9,  // 15: memos.api.v1.AIService.ListChatConversations:input_type -> memos.api.v1.ListChatConversationsRequest
-	11, // 16: memos.api.v1.AIService.GetChatConversation:input_type -> memos.api.v1.GetChatConversationRequest
-	12, // 17: memos.api.v1.AIService.DeleteChatConversation:input_type -> memos.api.v1.DeleteChatConversationRequest
-	13, // 18: memos.api.v1.AIService.SendChatMessage:input_type -> memos.api.v1.SendChatMessageRequest
-	4,  // 19: memos.api.v1.AIService.Transcribe:output_type -> memos.api.v1.TranscribeResponse
-	7,  // 20: memos.api.v1.AIService.CreateChatConversation:output_type -> memos.api.v1.ChatConversation
-	10, // 21: memos.api.v1.AIService.ListChatConversations:output_type -> memos.api.v1.ListChatConversationsResponse
-	7,  // 22: memos.api.v1.AIService.GetChatConversation:output_type -> memos.api.v1.ChatConversation
-	17, // 23: memos.api.v1.AIService.DeleteChatConversation:output_type -> google.protobuf.Empty
-	14, // 24: memos.api.v1.AIService.SendChatMessage:output_type -> memos.api.v1.SendChatMessageEvent
-	19, // [19:25] is the sub-list for method output_type
-	13, // [13:19] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	20, // 5: memos.api.v1.ChatCitation.source_revision:type_name -> google.protobuf.Timestamp
+	5,  // 6: memos.api.v1.ChatConversation.messages:type_name -> memos.api.v1.ChatMessage
+	20, // 7: memos.api.v1.ChatConversation.create_time:type_name -> google.protobuf.Timestamp
+	20, // 8: memos.api.v1.ChatConversation.update_time:type_name -> google.protobuf.Timestamp
+	7,  // 9: memos.api.v1.ListChatConversationsResponse.conversations:type_name -> memos.api.v1.ChatConversation
+	15, // 10: memos.api.v1.SendChatMessageEvent.start:type_name -> memos.api.v1.SendChatMessageStart
+	5,  // 11: memos.api.v1.SendChatMessageEvent.complete:type_name -> memos.api.v1.ChatMessage
+	5,  // 12: memos.api.v1.SendChatMessageStart.user_message:type_name -> memos.api.v1.ChatMessage
+	5,  // 13: memos.api.v1.SendChatMessageStart.assistant_message:type_name -> memos.api.v1.ChatMessage
+	17, // 14: memos.api.v1.SearchMemosRequest.filter:type_name -> memos.api.v1.SearchMemosFilter
+	20, // 15: memos.api.v1.SearchMemosFilter.created_after:type_name -> google.protobuf.Timestamp
+	20, // 16: memos.api.v1.SearchMemosFilter.created_before:type_name -> google.protobuf.Timestamp
+	21, // 17: memos.api.v1.SearchMemosFilter.visibility:type_name -> memos.api.v1.Visibility
+	20, // 18: memos.api.v1.MemoSearchResult.source_revision:type_name -> google.protobuf.Timestamp
+	18, // 19: memos.api.v1.SearchMemosResponse.results:type_name -> memos.api.v1.MemoSearchResult
+	2,  // 20: memos.api.v1.AIService.Transcribe:input_type -> memos.api.v1.TranscribeRequest
+	8,  // 21: memos.api.v1.AIService.CreateChatConversation:input_type -> memos.api.v1.CreateChatConversationRequest
+	9,  // 22: memos.api.v1.AIService.ListChatConversations:input_type -> memos.api.v1.ListChatConversationsRequest
+	11, // 23: memos.api.v1.AIService.GetChatConversation:input_type -> memos.api.v1.GetChatConversationRequest
+	12, // 24: memos.api.v1.AIService.DeleteChatConversation:input_type -> memos.api.v1.DeleteChatConversationRequest
+	13, // 25: memos.api.v1.AIService.SendChatMessage:input_type -> memos.api.v1.SendChatMessageRequest
+	16, // 26: memos.api.v1.AIService.SearchMemos:input_type -> memos.api.v1.SearchMemosRequest
+	4,  // 27: memos.api.v1.AIService.Transcribe:output_type -> memos.api.v1.TranscribeResponse
+	7,  // 28: memos.api.v1.AIService.CreateChatConversation:output_type -> memos.api.v1.ChatConversation
+	10, // 29: memos.api.v1.AIService.ListChatConversations:output_type -> memos.api.v1.ListChatConversationsResponse
+	7,  // 30: memos.api.v1.AIService.GetChatConversation:output_type -> memos.api.v1.ChatConversation
+	22, // 31: memos.api.v1.AIService.DeleteChatConversation:output_type -> google.protobuf.Empty
+	14, // 32: memos.api.v1.AIService.SendChatMessage:output_type -> memos.api.v1.SendChatMessageEvent
+	19, // 33: memos.api.v1.AIService.SearchMemos:output_type -> memos.api.v1.SearchMemosResponse
+	27, // [27:34] is the sub-list for method output_type
+	20, // [20:27] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_api_v1_ai_service_proto_init() }
@@ -1192,6 +1584,7 @@ func file_api_v1_ai_service_proto_init() {
 	if File_api_v1_ai_service_proto != nil {
 		return
 	}
+	file_api_v1_memo_service_proto_init()
 	file_api_v1_ai_service_proto_msgTypes[1].OneofWrappers = []any{
 		(*TranscriptionAudio_Content)(nil),
 		(*TranscriptionAudio_Uri)(nil),
@@ -1207,7 +1600,7 @@ func file_api_v1_ai_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_v1_ai_service_proto_rawDesc), len(file_api_v1_ai_service_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   14,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -1,13 +1,25 @@
+import { create } from "@bufbuild/protobuf";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { aiServiceClient } from "@/connect";
-import { type ChatConversation, type ChatMessage, ChatMessage_Role, ChatMessage_Status } from "@/types/proto/api/v1/ai_service_pb";
+import {
+  type ChatConversation,
+  type ChatMessage,
+  ChatMessage_Role,
+  ChatMessage_Status,
+  type SearchMemosRequest,
+  SearchMemosRequestSchema,
+} from "@/types/proto/api/v1/ai_service_pb";
 
 // Query keys factory for consistent cache management
 export const aiKeys = {
   all: ["ai"] as const,
   chatConversations: () => [...aiKeys.all, "chat-conversations"] as const,
   chatConversation: (name: string) => [...aiKeys.all, "chat-conversation", name] as const,
+  memoSearch: (request: SearchMemosRequest) =>
+    // React Query hashes keys with JSON.stringify, which cannot serialize the
+    // BigInt seconds of proto Timestamps.
+    [...aiKeys.all, "memo-search", JSON.stringify(request, (_, value) => (typeof value === "bigint" ? value.toString() : value))] as const,
 };
 
 export function useChatConversations() {
@@ -17,6 +29,20 @@ export function useChatConversations() {
       const response = await aiServiceClient.listChatConversations({});
       return response;
     },
+  });
+}
+
+// useMemoSearch runs the unified memo search for one submitted request. The
+// caller keeps the request in state and only replaces it on submit, so
+// typing never fires queries. Search works with no generation configuration.
+export function useMemoSearch(request: SearchMemosRequest | undefined) {
+  return useQuery({
+    queryKey: aiKeys.memoSearch(request ?? create(SearchMemosRequestSchema, {})),
+    queryFn: async () => {
+      const response = await aiServiceClient.searchMemos(request as SearchMemosRequest);
+      return response;
+    },
+    enabled: Boolean(request?.query.trim()),
   });
 }
 

@@ -5,6 +5,7 @@ export const ROUTES = {
   CHAT: "/chat",
   INBOX: "/inbox",
   ARCHIVED: "/archived",
+  SEARCH: "/search",
   SHORTCUTS: "/shortcuts",
   SETTING: "/setting",
   EXPLORE: "/explore",

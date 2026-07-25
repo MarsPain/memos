@@ -51,6 +51,8 @@ const (
 	// AIServiceSendChatMessageProcedure is the fully-qualified name of the AIService's SendChatMessage
 	// RPC.
 	AIServiceSendChatMessageProcedure = "/memos.api.v1.AIService/SendChatMessage"
+	// AIServiceSearchMemosProcedure is the fully-qualified name of the AIService's SearchMemos RPC.
+	AIServiceSearchMemosProcedure = "/memos.api.v1.AIService/SearchMemos"
 )
 
 // AIServiceClient is a client for the memos.api.v1.AIService service.
@@ -77,6 +79,12 @@ type AIServiceClient interface {
 	// Server streaming is served over the Connect endpoint only; the
 	// gRPC-Gateway JSON transport does not support streaming methods.
 	SendChatMessage(context.Context, *connect.Request[v1.SendChatMessageRequest]) (*connect.ServerStreamForClient[v1.SendChatMessageEvent], error)
+	// SearchMemos searches the memos the caller may read with exact, partial,
+	// and typo-tolerant matching over the derived search documents. Every
+	// result is reauthorized and revision-checked against the current source
+	// memo before its snippet is returned. Search works with no generation or
+	// embedding configuration.
+	SearchMemos(context.Context, *connect.Request[v1.SearchMemosRequest]) (*connect.Response[v1.SearchMemosResponse], error)
 }
 
 // NewAIServiceClient constructs a client for the memos.api.v1.AIService service. By default, it
@@ -126,6 +134,12 @@ func NewAIServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...c
 			connect.WithSchema(aIServiceMethods.ByName("SendChatMessage")),
 			connect.WithClientOptions(opts...),
 		),
+		searchMemos: connect.NewClient[v1.SearchMemosRequest, v1.SearchMemosResponse](
+			httpClient,
+			baseURL+AIServiceSearchMemosProcedure,
+			connect.WithSchema(aIServiceMethods.ByName("SearchMemos")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -137,6 +151,7 @@ type aIServiceClient struct {
 	getChatConversation    *connect.Client[v1.GetChatConversationRequest, v1.ChatConversation]
 	deleteChatConversation *connect.Client[v1.DeleteChatConversationRequest, emptypb.Empty]
 	sendChatMessage        *connect.Client[v1.SendChatMessageRequest, v1.SendChatMessageEvent]
+	searchMemos            *connect.Client[v1.SearchMemosRequest, v1.SearchMemosResponse]
 }
 
 // Transcribe calls memos.api.v1.AIService.Transcribe.
@@ -169,6 +184,11 @@ func (c *aIServiceClient) SendChatMessage(ctx context.Context, req *connect.Requ
 	return c.sendChatMessage.CallServerStream(ctx, req)
 }
 
+// SearchMemos calls memos.api.v1.AIService.SearchMemos.
+func (c *aIServiceClient) SearchMemos(ctx context.Context, req *connect.Request[v1.SearchMemosRequest]) (*connect.Response[v1.SearchMemosResponse], error) {
+	return c.searchMemos.CallUnary(ctx, req)
+}
+
 // AIServiceHandler is an implementation of the memos.api.v1.AIService service.
 type AIServiceHandler interface {
 	// Transcribe transcribes an audio file using an instance AI provider.
@@ -193,6 +213,12 @@ type AIServiceHandler interface {
 	// Server streaming is served over the Connect endpoint only; the
 	// gRPC-Gateway JSON transport does not support streaming methods.
 	SendChatMessage(context.Context, *connect.Request[v1.SendChatMessageRequest], *connect.ServerStream[v1.SendChatMessageEvent]) error
+	// SearchMemos searches the memos the caller may read with exact, partial,
+	// and typo-tolerant matching over the derived search documents. Every
+	// result is reauthorized and revision-checked against the current source
+	// memo before its snippet is returned. Search works with no generation or
+	// embedding configuration.
+	SearchMemos(context.Context, *connect.Request[v1.SearchMemosRequest]) (*connect.Response[v1.SearchMemosResponse], error)
 }
 
 // NewAIServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -238,6 +264,12 @@ func NewAIServiceHandler(svc AIServiceHandler, opts ...connect.HandlerOption) (s
 		connect.WithSchema(aIServiceMethods.ByName("SendChatMessage")),
 		connect.WithHandlerOptions(opts...),
 	)
+	aIServiceSearchMemosHandler := connect.NewUnaryHandler(
+		AIServiceSearchMemosProcedure,
+		svc.SearchMemos,
+		connect.WithSchema(aIServiceMethods.ByName("SearchMemos")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/memos.api.v1.AIService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AIServiceTranscribeProcedure:
@@ -252,6 +284,8 @@ func NewAIServiceHandler(svc AIServiceHandler, opts ...connect.HandlerOption) (s
 			aIServiceDeleteChatConversationHandler.ServeHTTP(w, r)
 		case AIServiceSendChatMessageProcedure:
 			aIServiceSendChatMessageHandler.ServeHTTP(w, r)
+		case AIServiceSearchMemosProcedure:
+			aIServiceSearchMemosHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -283,4 +317,8 @@ func (UnimplementedAIServiceHandler) DeleteChatConversation(context.Context, *co
 
 func (UnimplementedAIServiceHandler) SendChatMessage(context.Context, *connect.Request[v1.SendChatMessageRequest], *connect.ServerStream[v1.SendChatMessageEvent]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("memos.api.v1.AIService.SendChatMessage is not implemented"))
+}
+
+func (UnimplementedAIServiceHandler) SearchMemos(context.Context, *connect.Request[v1.SearchMemosRequest]) (*connect.Response[v1.SearchMemosResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("memos.api.v1.AIService.SearchMemos is not implemented"))
 }

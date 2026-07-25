@@ -10,6 +10,7 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
 
+	"github.com/usememos/memos/internal/markdown"
 	"github.com/usememos/memos/store"
 )
 
@@ -67,17 +68,25 @@ func contentHash(content string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// buildDocument projects a memo into its derived search document: the
+// buildDocument projects a memo into its derived search document through
+// ProjectDocument.
+func (s *Service) buildDocument(m *store.Memo) (*store.AISearchDocument, error) {
+	return ProjectDocument(s.markdown, m)
+}
+
+// ProjectDocument projects a memo into its derived search document: the
 // H1-derived title, the extracted tags, and a plain-text projection of the
 // markdown content, all normalized, plus the source-span mapping from
-// projected content byte ranges back to source content byte ranges.
-func (s *Service) buildDocument(m *store.Memo) (*store.AISearchDocument, error) {
+// projected content byte ranges back to source content byte ranges. It is
+// shared by the reconciler, which builds the stored documents, and by
+// retrieval, which reprojects the current source of a stale document.
+func ProjectDocument(markdownService markdown.Service, m *store.Memo) (*store.AISearchDocument, error) {
 	content := []byte(m.Content)
-	extracted, err := s.markdown.ExtractAll(content)
+	extracted, err := markdownService.ExtractAll(content)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to extract memo metadata")
 	}
-	chunks, err := s.markdown.ExtractText(content)
+	chunks, err := markdownService.ExtractText(content)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to extract memo text")
 	}

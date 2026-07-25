@@ -79,6 +79,11 @@ const ChatMessageBubble = ({
             ))}
           </div>
         )}
+        {!isUser && (message.retrievalReasons ?? []).length > 0 && (
+          <span className="text-xs text-muted-foreground">
+            {t("chat.retrieval-partial", { reasons: (message.retrievalReasons ?? []).join(", ") })}
+          </span>
+        )}
       </div>
     </div>
   );
