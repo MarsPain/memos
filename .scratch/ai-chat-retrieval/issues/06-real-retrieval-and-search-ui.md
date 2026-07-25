@@ -2,7 +2,7 @@
 
 Parent spec: [AI Chat And Retrieval](../../../docs/product-specs/ai-chat-retrieval.md)
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 05
 
 ## Outcome
@@ -42,3 +42,32 @@ cd web && pnpm lint && pnpm test
 
 Retrieval fixtures cover ranking, permission changes, projection-version isolation, stale-citation rejection, and budget
 exhaustion.
+
+## Comments
+
+Implemented: `server/ai/search.Retriever` runs bounded retrieval over the derived search documents and now serves both Chat
+grounding and the new `SearchMemos` RPC on `AIService` (additive proto change; Go/OpenAPI/TypeScript outputs regenerated).
+Matching: normalized query capped at 1,024 runes/32 words; exact token, substring (≥3 runes), and bounded-Levenshtein fuzzy
+(≥4 runes, distance 1–2) tiers weighted title > tags > content; multi-word queries are ANDed for search and ORed
+(`Query.AnyWord`) for chat questions. Structured filters: tags prefiltered on the document; creator (`users/{id}`), visibility,
+and created-time bounds applied on the reread memo. Budgets are the spec's provisional ones (32 MB scan in batches of 100, 200
+candidates, 20 results, 5 s search / 3 s chat wall clock) and report machine-readable partial reasons (`query_truncated`,
+`scan_budget_exhausted`, `candidate_budget_exhausted`, `time_budget_exhausted`); an empty reason list always means complete
+coverage. Citations: every candidate is reread through the `server/memo` seam, reauthorized via `CheckReadAccess`, and
+revision-checked by content hash; stale documents are reprojected from the current source and rescored, so stale indexed text
+never leaves Memos and permission changes between indexing and retrieval are never returned. Snippets quote the current source
+via the span mapping. Chat quotes hits into an 8,000-token estimated context favoring diverse memos (≤4,000 runes each) and
+cites exactly the quoted memos, and persists the retrieval partial reasons on the attempt (`retrieval_reasons` on
+`ChatMessage`/`AIMessagePayload`, surfaced as a muted note in the chat UI) so degraded grounding is never presented as
+complete. Citations carry the memo name, source revision and hash, and the snippet's source byte range on both
+`ChatCitation` and `MemoSearchResult`. Scaffold A (`server/ai/retrieval.go`) is removed. Web: `/search` page (query input, structured
+filters, results with snippets/rank reasons/citation links, partial banner) with a nav entry, `useMemoSearch` hook, en.json
+keys, and page tests. Retrieval fixtures cover exact/partial/fuzzy ranking, title-over-content weighting, tag matching, all
+structured filters, permission flips (private/archive), projection-version isolation, stale-citation regeneration and
+rejection, and deterministic budget exhaustion; router tests cover auth, filters, and search with no generation configuration.
+Review follow-ups: `ExtractUserIDFromName`/`MemoNamePrefix` reused from `resource_name.go`; a wall-clock deadline expiring
+mid-scan/mid-hydration reports `time_budget_exhausted` instead of `Internal`, while caller cancellation propagates as
+`Canceled`; `anyWord` travels on the parsed query.
+Local verification: `buf generate && buf lint` clean; `go test -race ./server/...` passes; `SKIP_CONTAINER_TESTS=1 go test
+./store/...` passes; `cd web && pnpm lint && pnpm test && pnpm build` passes. MySQL/PostgreSQL driver tests need Docker
+(unavailable locally); CI runs them. `golangci-lint` not installed locally; `go vet` and `gofmt` clean.
