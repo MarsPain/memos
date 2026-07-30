@@ -181,6 +181,14 @@ func TestDeleteUserCleansRelatedData(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	ownerConversation := createTestingAIConversation(ctx, t, ts, user.ID, "delete-owner-conversation")
+	createTestingUserMessage(ctx, t, ts, ownerConversation.ID, "delete-owner-request")
+	peerConversation := createTestingAIConversation(ctx, t, ts, peer.ID, "keep-peer-conversation")
+	createTestingUserMessage(ctx, t, ts, peerConversation.ID, "keep-peer-request")
+
+	upsertTestingAISearchDocument(ctx, t, ts, ownMemo.ID, "owner memo")
+	upsertTestingAISearchDocument(ctx, t, ts, peerMemo.ID, "peer memo")
+
 	_, err = ts.DeleteUser(ctx, &store.DeleteUser{ID: user.ID})
 	require.NoError(t, err)
 
@@ -245,4 +253,25 @@ func TestDeleteUserCleansRelatedData(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Nil(t, setting)
+
+	deletedConversations, err := ts.ListAIConversations(ctx, &store.FindAIConversation{UserID: &user.ID})
+	require.NoError(t, err)
+	require.Empty(t, deletedConversations)
+	deletedMessages, err := ts.ListAIMessages(ctx, &store.FindAIMessage{ConversationID: &ownerConversation.ID})
+	require.NoError(t, err)
+	require.Empty(t, deletedMessages)
+	keptConversation, err := ts.GetAIConversation(ctx, &store.FindAIConversation{ID: &peerConversation.ID})
+	require.NoError(t, err)
+	require.NotNil(t, keptConversation)
+	keptMessages, err := ts.ListAIMessages(ctx, &store.FindAIMessage{ConversationID: &peerConversation.ID})
+	require.NoError(t, err)
+	// The user message plus its assistant attempt.
+	require.Len(t, keptMessages, 2)
+
+	deletedDocument, err := ts.GetAISearchDocument(ctx, &store.FindAISearchDocument{MemoID: &ownMemo.ID})
+	require.NoError(t, err)
+	require.Nil(t, deletedDocument)
+	keptDocument, err := ts.GetAISearchDocument(ctx, &store.FindAISearchDocument{MemoID: &peerMemo.ID})
+	require.NoError(t, err)
+	require.NotNil(t, keptDocument)
 }

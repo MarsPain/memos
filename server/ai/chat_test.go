@@ -927,8 +927,8 @@ func TestSendMessageBoundsProviderContextByTokens(t *testing.T) {
 	collector, err := fixture.send(ctx, alice, conversation.UID, "hiking", "req-1")
 	require.NoError(t, err)
 	complete := requireCompleteEvent(t, collector)
-	// More than the old scaffold's three memos are cited, and the quoted
-	// context stays within the token budget.
+	// Many memos are cited — breadth over depth — and the quoted context
+	// stays within the token budget.
 	require.Greater(t, len(complete.Citations), 3)
 	prompt := fixture.model.StreamRequests[0].Messages[1].Content
 	require.LessOrEqual(t, len([]rune(prompt)), 8000*4+200)

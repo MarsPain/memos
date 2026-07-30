@@ -15,6 +15,8 @@ The in-product AI path and external MCP path are independent. AI provider keys a
 ## Authorization Invariants
 
 - Every Chat, search, conversation, and proposal operation requires an authenticated user.
+- Conversations and messages are private to their owner; every read path filters by the authenticated owner, and deleting a conversation cancels its
+  in-flight attempts. Account deletion removes the account's conversations and messages in the deletion transaction.
 - Retrieval may use an index for candidate selection, but source Memo authorization is rechecked before content leaves Memos.
 - A model cannot grant itself additional tools or permissions.
 - Agent writes require an owned, pending proposal plus explicit confirmation.
@@ -52,6 +54,10 @@ data when returned to the model. Confirmation state is never inferred from model
 Immediately before a snippet or model context leaves Memos, Retrieval rereads the source through the shared Memo authorization module and verifies the
 citation's source revision/hash. It discards or regenerates stale spans. Indexed visibility and stale normalized text are never treated as current
 authorization or current content.
+
+Persisted assistant answers and citation snippets are stored excerpts of Memo text inside the owner's chat history (`ai_message` payload); chat-history
+retention is the boundary for those copies, and they leave with the conversation or the account. When no generation model is configured, sending a Chat
+message fails with `FailedPrecondition` while search and conversation history remain available.
 
 ## Secrets and Endpoints
 

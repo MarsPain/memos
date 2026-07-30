@@ -18,7 +18,8 @@ The baseline remains one Memos process plus SQLite, MySQL, or PostgreSQL. Embedd
 
 The supported baseline is an individual or small trusted-group deployment. Retrieval work must be bounded by explicit scan, memory, candidate,
 context, and wall-clock budgets. Stage 2 and Stage 3 record the benchmarked support envelope for all three databases before their go/no-go gates;
-exceeding that envelope produces an explicit degraded result instead of unbounded work.
+exceeding that envelope produces an explicit degraded result instead of unbounded work. Stage 2 has recorded the SQLite envelope; the MySQL and
+PostgreSQL benchmark runs are pending and tracked by the Stage 2 benchmark issue.
 
 The initial searchable corpus is `NORMAL`, top-level Memos. An H1-derived title, extracted tags, and a plain-text projection of Markdown content are
 searchable. Archived Memos, comments, attachment bodies, and Chat history are excluded. Changing this corpus requires a new projection version and a
@@ -117,13 +118,13 @@ matching readiness results, and returns only normalized safe categories.
 
 ### 4.3 Shared Memo Application Module
 
-Current Memo authorization, validation, Markdown payload construction, and post-write side effects live in API v1 handlers. Before AI code depends on
-them, they move behind a deep `server/memo` module used by both existing Memo RPC handlers and `server/ai`. Its interface owns authorized reads,
+Memo authorization, validation, Markdown payload construction, and post-write side effects originally lived in API v1 handlers. Stage 2 extracted the
+read/authorization path behind a deep `server/memo` module used by both existing Memo RPC handlers and `server/ai`. Its interface owns authorized reads,
 searchable-source enumeration, normal Memo commands, and transactional application of a confirmed proposal. Store remains raw persistence and is not
 an authorization interface.
 
 The module preserves content limits, visibility and archived-state rules, Markdown payload extraction, and the existing webhook, notification, and SSE
-semantics. Stage 2 extracts the read/authorization path; Stage 4 extracts the mutation path needed for proposal application. Tests exercise the same
+semantics. The read/authorization extraction is delivered; Stage 4 extracts the mutation path needed for proposal application. Tests exercise the same
 module interface used by both callers.
 
 ### 4.4 Agent Capability Set
@@ -260,7 +261,8 @@ Structured filters such as tags, time, visibility, creator, and Memo properties 
 Each query has hard limits for normalized query size, lexical and semantic scan bytes, candidates per path, elapsed time, final results, and provider
 context. Retrieval reads in bounded batches and does not load an unbounded corpus or vector set into memory. When a budget is exhausted, the response
 marks itself partial or degraded with a machine-readable reason; it never presents incomplete semantic coverage as a complete result. Concrete safe
-defaults and benchmark evidence belong to change-scoped specs and linked issues for Stages 2 and 3.
+defaults and benchmark evidence belong to change-scoped specs and linked issues for Stages 2 and 3; the Stage 2 defaults and the recorded envelope
+live in the Stage 2 product specification.
 
 The baseline semantic path is a complete scan of the active generation within its declared support envelope. If that scan cannot finish inside its
 budget, Retrieval discards the incomplete semantic candidate set and returns lexical results with `SEMANTIC_BUDGET_EXCEEDED`; it does not rank an
@@ -268,8 +270,9 @@ arbitrary prefix of vector rows as though it represented the corpus.
 
 ### 7.2 Permission Enforcement
 
-Index metadata prefilters obvious unauthorized candidates. Before a snippet is returned or provider context is built, Retrieval reuses current Memo
-read authorization from `server/memo`. Current authorization, not the indexed visibility snapshot, is definitive.
+The Stage 2 implementation scans the shared corpus under its byte, candidate, and time budgets without an authorization prefilter. Before a snippet is
+returned or provider context is built, Retrieval reauthorizes every candidate through current Memo read authorization from `server/memo`. Current
+authorization, not the indexed visibility snapshot, is definitive.
 
 A citation contains the Memo resource name, source revision and hash, and a source span. Retrieval rereads and reauthorizes the Memo before returning a
 snippet or sending context. If the revision/hash no longer matches, it regenerates the snippet from the current source or discards the citation; stale

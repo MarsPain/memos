@@ -21,12 +21,15 @@ visible, configuration round-trips safely, and existing transcription behavior i
 
 ## Stage 2: Read-Only Chat and Fuzzy Retrieval
 
+[Delivery specification](product-specs/ai-chat-retrieval.md)
+
 - Add private conversations and message persistence.
 - Add streaming Chat.
 - Add authorized keyword/partial/fuzzy search with citations.
 - Add provider-independent derived search documents and corpus-projection versioning.
 - Extract the shared Memo read/authorization seam from API v1 handlers.
-- Establish benchmarked scan, memory, candidate, context, and wall-clock budgets for all databases.
+- Establish benchmarked scan, memory, candidate, context, and wall-clock budgets for all databases (recorded for SQLite; MySQL and PostgreSQL evidence
+  is pending in the Stage 2 benchmark issue).
 
 Go/no-go: Chat cannot mutate Memos, duplicate sends/retries do not duplicate user messages, all citations reauthorize and revision-check their source,
 budget exhaustion is reported honestly, and provider failure does not affect Memo capture.

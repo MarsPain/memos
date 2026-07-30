@@ -21,7 +21,13 @@ embedding assignment and optional dimensions, external-processing acknowledgemen
 Provider API keys remain in that write-only setting payload and are removed from API reads. Deployment-supplied AI settings shadow stored settings
 through the existing file-backed configuration lifecycle and are not copied into database tables.
 
-## Planned AI Records
+## Implemented AI Chat And Retrieval State
+
+Stage 2 ships three tables as separate incremental migrations for all three drivers plus `LATEST.sql`: `ai_conversation`, `ai_message`, and
+`ai_search_document`. Projection and normalization versions are both 1; the source content hash is hex SHA-256; the source revision is recorded as
+`memo_updated_ts`. Sending a chat message persists the user message and its first assistant attempt atomically; attempts interrupted by a restart are
+reconciled from `STREAMING` to `FAILED` at startup. Account deletion removes the account's conversations, messages, and the search documents of its
+deleted Memos in the same transaction as the other per-user cleanup.
 
 ### Conversation
 
@@ -30,13 +36,21 @@ history-disabled conversations require a later retention design.
 
 ### Message
 
-Stores conversation, role, visible content, lifecycle status, model metadata, usage, a client request ID, attempt relationships, and authorized Memo
-references. A request ID is unique within its conversation. Retrying a failed response adds an assistant attempt linked to the existing user message;
-it does not duplicate the user message.
+Stores conversation, role, visible content, lifecycle status, model metadata, usage, a client request ID, attempt relationships, authorized Memo
+references, and the retrieval partial/degraded reasons behind an answer. A request ID is unique within its conversation. Retrying a failed response
+adds an assistant attempt linked to the existing user message; it does not duplicate the user message.
 
 Messages do not store hidden model reasoning. Citation records contain a Memo resource name, source revision and hash, and source span without becoming
 a second canonical copy of a Memo. Citation text is rehydrated from the current authorized source and discarded or regenerated when its revision is
 stale.
+
+### Search document
+
+Stores source Memo identity and revision, source content hash, corpus-projection and normalization versions, normalized title/tags/body text, and the
+mapping from projected fields back to source spans. Search documents are provider-independent and power exact/partial/fuzzy retrieval when embeddings
+are disabled or rebuilding.
+
+## Planned AI Records
 
 ### Proposal
 
@@ -52,12 +66,6 @@ proposal unapplied.
 Before Stage 4, Memo storage gains a monotonic revision. Every user-visible mutation, including content, visibility, state, pinning, location,
 attachments, and relations, increments it. Update proposals capture the base revision and can apply only with a conditional update against that exact
 revision. Existing update timestamps are user-settable and are not a concurrency token.
-
-### Search document
-
-Stores source Memo identity and revision, source content hash, corpus-projection and normalization versions, normalized title/tags/body text, and the
-mapping from projected fields back to source spans. Search documents are provider-independent and power exact/partial/fuzzy retrieval when embeddings
-are disabled or rebuilding.
 
 ### Index generation
 
@@ -91,7 +99,9 @@ same similarity calculation.
 
 ## Authorization
 
-Index metadata may prefilter candidates by creator and visibility, but it is never an authorization source. Retrieval rechecks candidates through current Memo access rules immediately before returning content or sending context to a provider.
+Index metadata is never an authorization source. The Stage 2 implementation scans the shared corpus under byte, candidate, and time budgets without
+prefiltering by creator or visibility, and reauthorizes every candidate through current Memo access rules immediately before returning content or
+sending context to a provider.
 
 The first searchable corpus contains `NORMAL`, top-level Memos only. It projects the H1 title, extracted tags, and Markdown plain text. Archived Memos,
 comments, attachment bodies, and Chat history are excluded. Any corpus, normalization, chunking, or encoding change increments the corresponding
@@ -99,4 +109,4 @@ fingerprint version and rebuilds derived data.
 
 ## Migration Rules
 
-Every AI schema change must update SQLite, MySQL, and PostgreSQL migrations and each driver's `LATEST.sql`. Fresh installations and incremental upgrades must produce equivalent schemas. Account deletion must remove conversations, messages, proposals, search documents, and embedding chunks owned by or exclusively derived from the account. Memo and account deletion cleanup covers every active, building, and retired generation.
+Every AI schema change must update SQLite, MySQL, and PostgreSQL migrations and each driver's `LATEST.sql`. Fresh installations and incremental upgrades must produce equivalent schemas. Account deletion removes conversations, messages, and the search documents of the account's Memos in the deletion transaction (implemented); the same rule applies to proposals and embedding chunks when those records land. Memo and account deletion cleanup covers every active, building, and retired generation.

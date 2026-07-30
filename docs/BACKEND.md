@@ -14,10 +14,14 @@ The approved design introduces three distinct layers:
 - `server/ai`: authenticated application orchestration for conversations, retrieval, Agent proposals, and indexing.
 - `internal/ai`: provider-neutral model interfaces and concrete OpenAI/Gemini-compatible adapters for generation, embeddings, and transcription.
 
-The Stage 1 foundation is current code. `internal/ai/gateway` resolves provider assignments to the provider-neutral `ai.Model` interface;
-`internal/ai/provider/{openai,gemini}` contains wire adapters; and `internal/ai/transport.go` is the single destination-policy and limit enforcement
-path used by model calls and connectivity probes. API composition injects a model factory, so application callers and tests do not import adapter wire
-types. Capability test results persist only when the tested provider/model still matches the saved assignment.
+The Stage 1 foundation and the Stage 2 chat/retrieval surface are current code. `internal/ai/gateway` resolves provider assignments to the
+provider-neutral `ai.Model` interface; `internal/ai/provider/{openai,gemini}` contains wire adapters; and `internal/ai/transport.go` is the single
+destination-policy and limit enforcement path used by model calls and connectivity probes. API composition injects a model factory, so application
+callers and tests do not import adapter wire types. Capability test results persist only when the tested provider/model still matches the saved
+assignment.
+
+Stage 2 delivered the `server/memo` read seam and the `server/ai` conversation, streaming Chat, and `server/ai/search` retrieval modules behind
+authenticated API routes; Agent proposals and embedding generations remain future stages.
 
 Generation, streaming, structured tools, and embeddings have independent readiness states. A configured assignment begins unvalidated and never
 becomes ready merely because of provider type. Store and deployment configuration use the existing `InstanceSettingKey_AI` JSON persistence path;
@@ -28,9 +32,10 @@ recover identity from global state. `server/ai` does not call API handlers in-pr
 
 ## Memo Capability Seam
 
-Existing Memo authorization, content validation, Markdown payload construction, and post-write side effects currently live in API v1 handlers. They
-move incrementally behind the deep `server/memo` module: read/authorization behavior in Stage 2 and mutation behavior in Stage 4. Both Memo RPC handlers
-and `server/ai` use the same interface and behavioral tests.
+Memo read authorization, visibility rules, and searchable-source enumeration live behind the deep `server/memo` module (delivered in Stage 2); both
+the Memo RPC handlers and `server/ai` route through it. Content validation, Markdown payload construction, and post-write side effects for mutations
+still live in API v1 handlers and move behind the same module in Stage 4. Both Memo RPC handlers and `server/ai` use the same interface and behavioral
+tests.
 
 The in-product Agent receives only these capabilities:
 
@@ -51,12 +56,14 @@ to be repeated.
 
 Indexing is recoverable reconciliation, not a durable workflow engine. Memo changes signal index invalidation. A background runner uses keyset
 pagination, bounded batches, per-item backoff, and idempotent upserts to compare source revisions/hashes with index metadata. Restarting the server is
-sufficient to resume work.
+sufficient to resume work. This is implemented for search documents: `server/ai/search.Service` runs as a background runner from `server/server.go`,
+and Memo writes emit an invalidation signal after the source transaction commits.
 
-Provider-independent search documents keep lexical/fuzzy retrieval available without embeddings. Embedding changes build a non-queryable generation;
-projection changes first rebuild search documents and then any configured embedding generation. A complete verification pass promotes an embedding
-generation atomically, while the prior active generation remains queryable when its model is callable. The baseline runs one Memos process. Multiple
-concurrently writing processes require a future database-lease design rather than relying on process-local locks.
+Provider-independent search documents keep lexical/fuzzy retrieval available without embeddings; they are current code (`ai_search_document`, with
+corpus-projection and normalization versioning). Embedding changes build a non-queryable generation; projection changes first rebuild search documents
+and then any configured embedding generation. A complete verification pass promotes an embedding generation atomically, while the prior active
+generation remains queryable when its model is callable. The baseline runs one Memos process. Multiple concurrently writing processes require a future
+database-lease design rather than relying on process-local locks.
 
 ## External MCP
 

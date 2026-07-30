@@ -117,6 +117,12 @@ func deleteUserTargetsTx(ctx context.Context, tx *sql.Tx, userID int32, targets 
 	if err := deleteMemoRelationsTx(ctx, tx, memoIDs); err != nil {
 		return err
 	}
+	if err := deleteAISearchDocumentsTx(ctx, tx, memoIDs); err != nil {
+		return err
+	}
+	if err := deleteAIConversationsTx(ctx, tx, userID); err != nil {
+		return err
+	}
 	if err := deleteMemosTx(ctx, tx, memoIDs); err != nil {
 		return err
 	}
@@ -446,6 +452,30 @@ func deleteMemoRelationsTx(ctx context.Context, tx *sql.Tx, memoIDs []int32) err
 		}
 	}
 	return nil
+}
+
+// deleteAISearchDocumentsTx removes the derived search documents of the
+// deleted memos. Search documents are memo-derived data; they leave with the
+// memo rather than waiting for reconciliation to sweep them.
+func deleteAISearchDocumentsTx(ctx context.Context, tx *sql.Tx, memoIDs []int32) error {
+	for _, batch := range deleteUserBatches(memoIDs, deleteUserBatchSize) {
+		clause, args := deleteUserInClause(1, batch)
+		if _, err := tx.ExecContext(ctx, `DELETE FROM ai_search_document WHERE memo_id IN `+clause, args...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// deleteAIConversationsTx removes the user's private AI conversations and
+// their messages. Messages go first explicitly rather than relying on the
+// foreign-key cascade so the cleanup is identical on every driver.
+func deleteAIConversationsTx(ctx context.Context, tx *sql.Tx, userID int32) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM ai_message WHERE conversation_id IN (SELECT id FROM ai_conversation WHERE user_id = `+deleteUserPlaceholder(1)+`)`, userID); err != nil {
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `DELETE FROM ai_conversation WHERE user_id = `+deleteUserPlaceholder(1), userID)
+	return err
 }
 
 func deleteMemosTx(ctx context.Context, tx *sql.Tx, memoIDs []int32) error {
