@@ -11,6 +11,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  checks: write
+
 env:
   GO_VERSION: "1.26.2"
 
@@ -42,7 +45,8 @@ jobs:
         run: |
           DRIVER=${{ matrix.driver }} go test ./server/ai/search/ -run '^$' -bench BenchmarkRetrieval -benchtime=10x -count=1 -v 2>&1 | tee benchmark-${{ matrix.driver }}.txt
 
-      # Job summaries are visible on the public run page, so the evidence can
+      # Job summaries are visible on the public run page, and the check-run
+      # output is readable through the public checks API, so the evidence can
       # be collected without authenticated log or artifact downloads.
       - name: Publish results to the job summary
         if: always()
@@ -53,6 +57,25 @@ jobs:
             grep -E "ns/op|partial reasons|^goos:|^goarch:|^pkg:|^cpu:|^ok " benchmark-${{ matrix.driver }}.txt || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish results as a check run
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RESULTS=$(grep -E "ns/op|partial reasons|^goos:|^goarch:|^pkg:|^cpu:|^ok " benchmark-${{ matrix.driver }}.txt || true)
+          jq -n \
+            --arg name "retrieval-benchmarks-${{ matrix.driver }}" \
+            --arg sha "${{ github.sha }}" \
+            --arg text "$RESULTS" \
+            '{name: $name, head_sha: $sha, status: "completed", conclusion: "success",
+              output: {title: $name, summary: "Retrieval budget benchmark evidence (docs/product-specs/ai-chat-retrieval.md)", text: $text}}' \
+          | curl -sf -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${{ github.repository }}/check-runs" \
+              -d @- > /dev/null
 
       - name: Upload benchmark output
         uses: actions/upload-artifact@v4
