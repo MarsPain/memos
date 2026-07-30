@@ -18,8 +18,8 @@ The baseline remains one Memos process plus SQLite, MySQL, or PostgreSQL. Embedd
 
 The supported baseline is an individual or small trusted-group deployment. Retrieval work must be bounded by explicit scan, memory, candidate,
 context, and wall-clock budgets. Stage 2 and Stage 3 record the benchmarked support envelope for all three databases before their go/no-go gates;
-exceeding that envelope produces an explicit degraded result instead of unbounded work. Stage 2 has recorded the SQLite envelope; the MySQL and
-PostgreSQL benchmark runs are pending and tracked by the Stage 2 benchmark issue.
+exceeding that envelope produces an explicit degraded result instead of unbounded work. Stage 2 has recorded the envelope for
+all three databases (SQLite, MySQL, PostgreSQL); the evidence lives in the Stage 2 benchmark issue.
 
 The initial searchable corpus is `NORMAL`, top-level Memos. An H1-derived title, extracted tags, and a plain-text projection of Markdown content are
 searchable. Archived Memos, comments, attachment bodies, and Chat history are excluded. Changing this corpus requires a new projection version and a

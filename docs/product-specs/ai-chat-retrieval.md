@@ -30,7 +30,7 @@ Semantic (embedding) retrieval, proposals, and the Agent remain out of scope.
 - Private conversation and message persistence (`ai_conversation`, `ai_message`) with client request IDs and assistant attempts.
 - Streaming Chat over a Connect server-streaming RPC on `AIService`, with bounded context construction from retrieved citations.
 - Web UI for Chat and unified search, including streaming, degraded states, and citation display.
-- Cross-database benchmarks that validate or tighten the provisional retrieval budgets below.
+- Cross-database benchmarks that validate or tighten the retrieval budgets below.
 
 ## Out Of Scope
 
@@ -74,8 +74,7 @@ Semantic (embedding) retrieval, proposals, and the Agent remain out of scope.
 ### Budgets
 
 Each query enforces hard limits; exhaustion returns a machine-readable partial/degraded reason rather than unbounded work.
-Provisional defaults (the Stage 2 cross-database benchmarks validate or tighten each value before the go/no-go gate; SQLite
-evidence is recorded, MySQL and PostgreSQL runs are pending — see the envelope table below):
+Defaults (validated by the Stage 2 cross-database benchmarks on all three databases — evidence in the benchmark issue):
 
 - Normalized query text: 1,024 characters.
 - Lexical scan: 32 MB of search-document bytes per query, read in bounded batches.
@@ -89,9 +88,9 @@ results, never unbounded work. On the measured hardware the 32 MB scan budget bi
 
 | Database | Largest corpus served within budgets | Query latency at the envelope | Evidence |
 | --- | --- | --- | --- |
-| SQLite | 32 MB of search-document bytes (≈28,200 documents at ≈1.19 KB each); largest corpus measured fully served: 22,000 documents / 26.1 MB | ≈0.7 s of the 5 s wall clock | Recorded on Apple M4 Pro in the benchmark issue |
-| MySQL | Pending a Docker-capable benchmark run | Pending | Fixtures ready |
-| PostgreSQL | Pending a Docker-capable benchmark run | Pending | Fixtures ready |
+| SQLite | 32 MB of search-document bytes (≈28,200 documents at ≈1.19 KB each); largest corpus measured fully served: 22,000 documents / 26.1 MB | ≈0.9 s of the 5 s wall clock (≈0.7 s on Apple M4 Pro) | Recorded in the benchmark issue |
+| MySQL | Same byte envelope; the scan trips at the identical point: 28,234 documents / 33,554,302 bytes | ≈1.4 s of the 5 s wall clock | Recorded in the benchmark issue |
+| PostgreSQL | Same byte envelope; the scan trips at the identical point: 28,234 documents / 33,554,302 bytes | ≈1.4 s of the 5 s wall clock | Recorded in the benchmark issue |
 
 The 200-candidate budget binds early for broad common-word multiword queries — by design; the response reports
 `candidate_budget_exhausted` rather than presenting partial coverage as complete.
@@ -145,8 +144,8 @@ The 200-candidate budget binds early for broad common-word multiword queries —
   scaffold with the real implementation — persistence, streaming, then real retrieval — before full seam extraction completes.
 - Search documents and lexical retrieval ship without any generation or embedding configuration, so fuzzy search works on a default
   deployment.
-- Retrieval budget defaults are provisional in this spec and become binding only after the Stage 2 benchmark issue records evidence
-  for all three databases.
+- Retrieval budget defaults were provisional in this spec and became binding when the Stage 2 benchmark issue recorded evidence
+  for all three databases; no default was contradicted, so none was tightened.
 - Each new table migrates with its own feature issue rather than in a combined schema issue.
 
 ## Testing Decisions

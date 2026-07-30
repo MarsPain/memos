@@ -2,7 +2,7 @@
 
 Parent spec: [AI Chat And Retrieval](../../../docs/product-specs/ai-chat-retrieval.md)
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 03, 04, 06, 07
 
 ## Outcome
@@ -55,10 +55,12 @@ buf generate && buf lint` clean with no generated diff; `go test -race ./interna
 pnpm lint && pnpm test && pnpm build` passes (241 tests). `git diff main...HEAD -- server/router/mcp/` is empty and
 `git diff --check` is clean; no credentials or provider keys appear in the branch diff.
 
-Residual: the only open Stage 2 item is issue 07's MySQL/PostgreSQL benchmark evidence, which needs a Docker-capable
-environment (fixtures ready in `server/ai/search/benchmark_test.go`). The spec's budget defaults stay provisional for those two
-databases until recorded there; everything else in this issue's scope is done. Status stays `ready-for-agent` for that residual
-environment-dependent step rather than `resolved`.
+Residual closed: the MySQL/PostgreSQL benchmark evidence — the last open Stage 2 item — was recorded via the
+`.github/workflows/retrieval-benchmarks.yml` CI workflow (GitHub runners provide the Docker daemon TestContainers needs that the
+local environment lacks). Results are published as the `retrieval-benchmarks-<driver>` check runs on commit 87f80e83 and
+appended to issue 07, which is now resolved; the spec's budget defaults are validated on all three databases and became
+binding. With that, every acceptance criterion in the parent spec has supporting automated or documented verification, and this
+issue is resolved.
 
 Known limitation (out of scope): account deletion removes conversation and message rows but cannot cancel an attempt streaming
 on another goroutine the way single-conversation deletion does; a finalize racing the deletion affects zero rows or is rejected

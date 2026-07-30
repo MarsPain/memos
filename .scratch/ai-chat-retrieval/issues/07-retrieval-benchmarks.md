@@ -2,7 +2,7 @@
 
 Parent spec: [AI Chat And Retrieval](../../../docs/product-specs/ai-chat-retrieval.md)
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 06
 
 ## Outcome
@@ -86,17 +86,38 @@ Findings (SQLite):
 - Memory tracks scanned bytes at roughly 33 allocated bytes per scanned byte (transient per-query allocations, GC'd between
   queries); the 3 s Chat retrieval phase has ≈4x headroom against the measured 0.7 s envelope latency.
 
-MySQL/PostgreSQL evidence is PENDING: no Docker-compatible runtime is available in the environment that produced this change
-(`docker info` fails; TestContainers skips). The fixtures are driver-parameterized and run without live providers; record the
-missing rows in a Docker-capable environment with:
+Cross-database evidence (GitHub Actions `ubuntu-latest`, run
+[30557390310](https://github.com/MarsPain/memos/actions/runs/30557390310), `-benchtime=10x`; no local Docker runtime exists,
+so the `.github/workflows/retrieval-benchmarks.yml` workflow ran the driver-parameterized fixtures where TestContainers works).
+Scanned bytes, documents scanned, candidates, and hits are identical on all three drivers at every corpus size — the seeded
+corpus is byte-identical across databases.
 
-```bash
-DRIVER=mysql go test ./server/ai/search/ -run '^$' -bench BenchmarkRetrieval -benchtime=10x -v
-DRIVER=postgres go test ./server/ai/search/ -run '^$' -bench BenchmarkRetrieval -benchtime=10x -v
-```
+Latency per query at the two decisive corpus sizes (worst row over the five queries, ns/op):
 
-Until those two runs are appended here, the spec's budget defaults remain provisional for MySQL and PostgreSQL and this issue
-stays open (`Status: ready-for-agent` — the remaining step is an environment-dependent measurement, not design work).
+| Corpus | SQLite | MySQL | PostgreSQL |
+| --- | --- | --- | --- |
+| 22,000 docs (26.1 MB, fully served) | 919,293,074 | 1,382,047,883 | 1,381,106,329 |
+| 30,000 docs (trips at 28,234 docs / 33,554,302 bytes) | 1,155,512,064 | 1,788,693,478 | 1,772,822,066 |
+
+Small/medium scaling holds on all drivers (1,000 docs: 31–71 ms; 8,000 docs: 232–531 ms), the 200-candidate budget binds for
+common-word multiword queries at every size, and every run past the scan budget reports `scan_budget_exhausted` with
+per-query latency ≤1.79 s of the 5 s wall clock. Full per-query rows are published as the `retrieval-benchmarks-<driver>`
+check runs on commit 87f80e83 and as workflow artifacts.
+
+Findings (all three databases):
+
+- No budget default is contradicted on any driver; none was tightened. The defaults are now binding per the spec's Accepted
+  Implementation Decisions.
+- The support envelope is identical on all three drivers: any corpus totaling ≤32 MB of search-document bytes is fully
+  covered; the scan trips at exactly 28,234 documents / 33,554,302 bytes. The largest corpus measured fully served is 22,000
+  documents / 26.1 MB.
+- The 5 s wall clock never binds: worst measured query is 1.79 s (MySQL, 30k corpus). The 3 s Chat retrieval phase keeps ≥2x
+  headroom on every driver at the envelope.
+- Container round trips cost MySQL/PostgreSQL roughly 0.4–0.6 s per envelope query over file-backed SQLite — comfortably
+  inside the budgets.
+
+Status: resolved — every budget default is now backed by recorded evidence on SQLite, MySQL, and PostgreSQL; the spec's
+budget section and envelope table record the final values.
 
 Review follow-ups (two-axis review): envelope wording now separates the largest corpus measured fully served (22,000 documents
 / 26.1 MB) from the byte-level trip point (28,234 documents / 33,554,302 bytes in the 30,000-document run); added the 32-word
