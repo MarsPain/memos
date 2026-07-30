@@ -42,6 +42,18 @@ jobs:
         run: |
           DRIVER=${{ matrix.driver }} go test ./server/ai/search/ -run '^$' -bench BenchmarkRetrieval -benchtime=10x -count=1 -v 2>&1 | tee benchmark-${{ matrix.driver }}.txt
 
+      # Job summaries are visible on the public run page, so the evidence can
+      # be collected without authenticated log or artifact downloads.
+      - name: Publish results to the job summary
+        if: always()
+        run: |
+          {
+            echo "## Retrieval benchmarks — ${{ matrix.driver }}"
+            echo '```text'
+            grep -E "ns/op|partial reasons|^goos:|^goarch:|^pkg:|^cpu:|^ok " benchmark-${{ matrix.driver }}.txt || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload benchmark output
         uses: actions/upload-artifact@v4
         with:
