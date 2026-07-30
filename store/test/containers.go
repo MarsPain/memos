@@ -78,16 +78,29 @@ func requireTestNetwork(ctx context.Context) (*testcontainers.DockerNetwork, err
 	return nw, nil
 }
 
-func skipIfContainerProviderUnavailable(t *testing.T) {
+func skipIfContainerProviderUnavailable(t testing.TB) {
 	t.Helper()
 	if os.Getenv("SKIP_CONTAINER_TESTS") == "1" {
 		t.Skip("skipping container-based test (SKIP_CONTAINER_TESTS=1)")
 	}
-	testcontainers.SkipIfProviderIsNotHealthy(t)
+	// The TB-friendly equivalent of testcontainers.SkipIfProviderIsNotHealthy,
+	// which only accepts *testing.T.
+	defer func() {
+		if r := recover(); r != nil {
+			t.Skipf("recovered from panic: %v. Docker is not running. Testcontainers can't perform its work without it", r)
+		}
+	}()
+	provider, err := testcontainers.ProviderDocker.GetProvider()
+	if err != nil {
+		t.Skipf("Docker is not running. Testcontainers can't perform its work without it: %s", err)
+	}
+	if err := provider.Health(context.Background()); err != nil {
+		t.Skipf("Docker is not running. Testcontainers can't perform its work without it: %s", err)
+	}
 }
 
 // GetMySQLDSN starts a MySQL container (if not already running) and creates a fresh database for this test.
-func GetMySQLDSN(t *testing.T) string {
+func GetMySQLDSN(t testing.TB) string {
 	skipIfContainerProviderUnavailable(t)
 
 	ctx := context.Background()
@@ -189,7 +202,7 @@ func waitForDB(driver, dsn string, timeout time.Duration) error {
 }
 
 // GetPostgresDSN starts a PostgreSQL container (if not already running) and creates a fresh database for this test.
-func GetPostgresDSN(t *testing.T) string {
+func GetPostgresDSN(t testing.TB) string {
 	skipIfContainerProviderUnavailable(t)
 
 	ctx := context.Background()

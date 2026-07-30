@@ -136,11 +136,24 @@ type Hit struct {
 	Source         *store.Memo
 }
 
+// ScanStats records the coverage one query achieved against the budgets, so
+// benchmarks and operators can see the work a query did rather than inferring
+// it from the results. BytesScanned counts the search-document bytes (title,
+// tags, and content) the scan consumed, DocumentsScanned the documents those
+// bytes came from, and Candidates the matching documents kept before final
+// ranking.
+type ScanStats struct {
+	BytesScanned     int
+	DocumentsScanned int
+	Candidates       int
+}
+
 // Outcome is the result of one retrieval query. PartialReasons empty means
 // the searchable corpus was covered completely.
 type Outcome struct {
 	Hits           []Hit
 	PartialReasons []string
+	Stats          ScanStats
 }
 
 // Retriever runs bounded lexical, partial, and typo-tolerant retrieval over
@@ -196,11 +209,12 @@ func (r *Retriever) Search(ctx context.Context, user *store.User, query Query) (
 		outcome.PartialReasons = append(outcome.PartialReasons, ReasonQueryTruncated)
 	}
 
-	candidates, scanReasons, err := r.scan(ctx, parsed, tagFilters, budgets)
+	candidates, scanReasons, stats, err := r.scan(ctx, parsed, tagFilters, budgets)
 	if err != nil {
 		return nil, err
 	}
 	outcome.PartialReasons = append(outcome.PartialReasons, scanReasons...)
+	outcome.Stats = stats
 
 	for _, candidate := range candidates {
 		if len(outcome.Hits) >= budgets.MaxResults {
@@ -244,17 +258,17 @@ func appendReason(reasons []string, reason string) []string {
 // pagination, keeping the top candidates under the scan, candidate, and
 // wall-clock budgets. Documents from another projection or normalization
 // version are excluded; reconciliation rebuilds them.
-func (r *Retriever) scan(ctx context.Context, query *parsedQuery, tagFilters []string, budgets Budgets) ([]candidate, []string, error) {
+func (r *Retriever) scan(ctx context.Context, query *parsedQuery, tagFilters []string, budgets Budgets) ([]candidate, []string, ScanStats, error) {
 	reasons := []string{}
 	candidates := []candidate{}
+	stats := ScanStats{}
 	candidateDropped := false
-	scannedBytes := 0
 	var afterID int32
 
 	for {
 		if ctx.Err() != nil {
 			if !timeBudgetExpired(ctx) {
-				return nil, nil, status.FromContextError(ctx.Err()).Err()
+				return nil, nil, ScanStats{}, status.FromContextError(ctx.Err()).Err()
 			}
 			reasons = appendReason(reasons, ReasonTimeBudgetExhausted)
 			break
@@ -268,11 +282,11 @@ func (r *Retriever) scan(ctx context.Context, query *parsedQuery, tagFilters []s
 					reasons = appendReason(reasons, ReasonTimeBudgetExhausted)
 					break
 				}
-				return nil, nil, status.FromContextError(ctx.Err()).Err()
+				return nil, nil, ScanStats{}, status.FromContextError(ctx.Err()).Err()
 			}
 			// A store failure mid-scan fails the query rather than silently
 			// narrowing coverage.
-			return nil, nil, status.Errorf(codes.Internal, "failed to scan search documents: %v", err)
+			return nil, nil, ScanStats{}, status.Errorf(codes.Internal, "failed to scan search documents: %v", err)
 		}
 		stop := false
 		for _, document := range documents {
@@ -281,12 +295,13 @@ func (r *Retriever) scan(ctx context.Context, query *parsedQuery, tagFilters []s
 			for _, tag := range document.Tags {
 				documentBytes += len(tag)
 			}
-			if scannedBytes+documentBytes > budgets.MaxScanBytes {
+			if stats.BytesScanned+documentBytes > budgets.MaxScanBytes {
 				reasons = appendReason(reasons, ReasonScanBudgetExhausted)
 				stop = true
 				break
 			}
-			scannedBytes += documentBytes
+			stats.BytesScanned += documentBytes
+			stats.DocumentsScanned++
 
 			if document.ProjectionVersion != ProjectionVersion || document.NormalizationVersion != NormalizationVersion {
 				continue
@@ -313,7 +328,8 @@ func (r *Retriever) scan(ctx context.Context, query *parsedQuery, tagFilters []s
 		reasons = appendReason(reasons, ReasonCandidateBudgetExhausted)
 	}
 	sortCandidates(candidates)
-	return candidates, reasons, nil
+	stats.Candidates = len(candidates)
+	return candidates, reasons, stats, nil
 }
 
 // tagsMatch reports whether the document carries every required tag. The

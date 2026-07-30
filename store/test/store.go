@@ -22,7 +22,7 @@ import (
 // Each test gets its own isolated database:
 //   - SQLite: new temp file per test
 //   - MySQL/PostgreSQL: new database per test in shared container
-func NewTestingStore(ctx context.Context, t *testing.T) *store.Store {
+func NewTestingStore(ctx context.Context, t testing.TB) *store.Store {
 	driver := getDriverFromEnv()
 	profile := getTestingProfileForDriver(t, driver)
 	dbDriver, err := db.NewDBDriver(profile)
@@ -39,7 +39,7 @@ func NewTestingStore(ctx context.Context, t *testing.T) *store.Store {
 
 // NewTestingStoreWithDSN creates a testing store connected to a specific DSN.
 // This is useful for testing migrations on existing data.
-func NewTestingStoreWithDSN(_ context.Context, t *testing.T, driver, dsn string) *store.Store {
+func NewTestingStoreWithDSN(_ context.Context, t testing.TB, driver, dsn string) *store.Store {
 	profile := &profile.Profile{
 		Port:    getUnusedPort(),
 		Data:    t.TempDir(), // Dummy dir, DSN matters
@@ -72,7 +72,7 @@ func getUnusedPort() int {
 }
 
 // getTestingProfileForDriver creates a testing profile for a specific driver.
-func getTestingProfileForDriver(t *testing.T, driver string) *profile.Profile {
+func getTestingProfileForDriver(t testing.TB, driver string) *profile.Profile {
 	// Attempt to load .env file if present (optional, for local development)
 	_ = godotenv.Load(".env")
 

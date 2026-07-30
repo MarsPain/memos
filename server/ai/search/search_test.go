@@ -20,7 +20,7 @@ type searchTestFixture struct {
 	owner   *store.User
 }
 
-func newSearchTestFixture(ctx context.Context, t *testing.T) *searchTestFixture {
+func newSearchTestFixture(ctx context.Context, t testing.TB) *searchTestFixture {
 	t.Helper()
 	st := teststore.NewTestingStore(ctx, t)
 	t.Cleanup(func() { _ = st.Close() })
@@ -34,7 +34,7 @@ func newSearchTestFixture(ctx context.Context, t *testing.T) *searchTestFixture 
 	}
 }
 
-func (f *searchTestFixture) createMemo(ctx context.Context, t *testing.T, uid, content string) *store.Memo {
+func (f *searchTestFixture) createMemo(ctx context.Context, t testing.TB, uid, content string) *store.Memo {
 	t.Helper()
 	created, err := f.store.CreateMemo(ctx, &store.Memo{
 		UID:        uid,
@@ -46,7 +46,7 @@ func (f *searchTestFixture) createMemo(ctx context.Context, t *testing.T, uid, c
 	return created
 }
 
-func (f *searchTestFixture) getDocument(ctx context.Context, t *testing.T, memoID int32) *store.AISearchDocument {
+func (f *searchTestFixture) getDocument(ctx context.Context, t testing.TB, memoID int32) *store.AISearchDocument {
 	t.Helper()
 	document, err := f.store.GetAISearchDocument(ctx, &store.FindAISearchDocument{MemoID: &memoID})
 	require.NoError(t, err)

@@ -74,13 +74,27 @@ Semantic (embedding) retrieval, proposals, and the Agent remain out of scope.
 ### Budgets
 
 Each query enforces hard limits; exhaustion returns a machine-readable partial/degraded reason rather than unbounded work.
-Provisional defaults (validated or tightened by the Stage 2 cross-database benchmarks before the go/no-go gate):
+Provisional defaults (the Stage 2 cross-database benchmarks validate or tighten each value before the go/no-go gate; SQLite
+evidence is recorded, MySQL and PostgreSQL runs are pending — see the envelope table below):
 
 - Normalized query text: 1,024 characters.
 - Lexical scan: 32 MB of search-document bytes per query, read in bounded batches.
 - Candidates per query: 200 before fusion; final results: 20.
 - Retrieval wall clock: 5 seconds per search request; 3 seconds for the retrieval phase of a Chat request.
 - Chat provider context: 8,000 tokens, favoring diverse source Memos, with retrieved text marked as untrusted quotation.
+
+Benchmarked support envelope per database, measured by the fixtures in `server/ai/search/benchmark_test.go` at the defaults
+above. A corpus past the envelope still answers within the wall clock but reports `scan_budget_exhausted` — explicit degraded
+results, never unbounded work. On the measured hardware the 32 MB scan budget binds long before the 5-second wall clock.
+
+| Database | Largest corpus served within budgets | Query latency at the envelope | Evidence |
+| --- | --- | --- | --- |
+| SQLite | 32 MB of search-document bytes (≈28,200 documents at ≈1.19 KB each); largest corpus measured fully served: 22,000 documents / 26.1 MB | ≈0.7 s of the 5 s wall clock | Recorded on Apple M4 Pro in the benchmark issue |
+| MySQL | Pending a Docker-capable benchmark run | Pending | Fixtures ready |
+| PostgreSQL | Pending a Docker-capable benchmark run | Pending | Fixtures ready |
+
+The 200-candidate budget binds early for broad common-word multiword queries — by design; the response reports
+`candidate_budget_exhausted` rather than presenting partial coverage as complete.
 
 ## Conversation And Chat
 
