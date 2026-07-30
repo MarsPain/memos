@@ -1,0 +1,49 @@
+name: Retrieval Benchmarks
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/retrieval-benchmarks.yml"
+      - "server/ai/search/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.26.2"
+
+jobs:
+  benchmarks:
+    name: Retrieval benchmarks (${{ matrix.driver }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        driver: [sqlite, mysql, postgres]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
+
+      # The ubuntu runners provide the Docker daemon Testcontainers needs for
+      # the mysql/postgres drivers; sqlite runs file-backed. The output is the
+      # benchmark evidence for the retrieval budget envelope in
+      # docs/product-specs/ai-chat-retrieval.md.
+      - name: Run retrieval benchmarks
+        run: |
+          DRIVER=${{ matrix.driver }} go test ./server/ai/search/ -run '^$' -bench BenchmarkRetrieval -benchtime=10x -count=1 -v 2>&1 | tee benchmark-${{ matrix.driver }}.txt
+
+      - name: Upload benchmark output
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrieval-benchmarks-${{ matrix.driver }}
+          path: benchmark-${{ matrix.driver }}.txt

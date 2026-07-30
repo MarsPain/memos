@@ -66,6 +66,10 @@ cd proto && buf format -w          # Format proto files
 
 # Documentation
 python3 scripts/validate_docs.py    # Validate Harness structure and internal links
+
+# Retrieval benchmarks (evidence for the retrieval budget envelope)
+go test ./server/ai/search/ -run '^$' -bench BenchmarkRetrieval -benchtime=10x -v   # file-backed SQLite
+DRIVER=mysql go test ./server/ai/search/ -run '^$' -bench BenchmarkRetrieval -benchtime=10x -v   # needs Docker; DRIVER=postgres likewise
 ```
 
 ## Code Map
