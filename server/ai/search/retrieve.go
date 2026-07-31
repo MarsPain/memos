@@ -3,6 +3,7 @@ package search
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -166,6 +167,9 @@ type Retriever struct {
 	memos    *memo.Service
 	markdown markdown.Service
 	budgets  Budgets
+	// semantic is the optional semantic query path; nil keeps retrieval
+	// purely lexical (Stage 2 behavior).
+	semantic *SemanticSearcher
 }
 
 // NewRetriever creates a Retriever with the given budgets; zero fields fall
@@ -177,6 +181,12 @@ func NewRetriever(s *store.Store, memos *memo.Service, markdownService markdown.
 		markdown: markdownService,
 		budgets:  budgets.normalize(),
 	}
+}
+
+// SetSemanticSearcher attaches the semantic query path. A nil searcher keeps
+// retrieval purely lexical.
+func (r *Retriever) SetSemanticSearcher(semantic *SemanticSearcher) {
+	r.semantic = semantic
 }
 
 // Search runs one retrieval query for the user. Retrieval is read-only and
@@ -215,6 +225,12 @@ func (r *Retriever) Search(ctx context.Context, user *store.User, query Query) (
 	}
 	outcome.PartialReasons = append(outcome.PartialReasons, scanReasons...)
 	outcome.Stats = stats
+
+	// Scaffold D: fuse the semantic candidates with naive interleaving.
+	// TODO(issue 05): replace with ordinal-rank fusion and the semantic scan
+	// budget.
+	candidates = r.fuseSemantic(ctx, parsed.text, tagFilters, candidates, budgets)
+	outcome.Stats.Candidates = len(candidates)
 
 	for _, candidate := range candidates {
 		if len(outcome.Hits) >= budgets.MaxResults {
@@ -393,7 +409,14 @@ func (r *Retriever) hydrate(ctx context.Context, user *store.User, scored candid
 		}
 		rescored, ok := scoreDocument(fresh, indexDocument(fresh), query)
 		if !ok {
-			return nil, nil
+			// A semantic candidate does not need a lexical match after
+			// reprojection; its snippet falls back to the source's leading
+			// runes. A purely lexical candidate that no longer matches is
+			// discarded.
+			if !slices.Contains(scored.reasons, RankReasonSemantic) {
+				return nil, nil
+			}
+			rescored = candidate{document: fresh, reasons: []string{RankReasonSemantic}}
 		}
 		scored = rescored
 		document = fresh

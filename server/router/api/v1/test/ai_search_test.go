@@ -2,14 +2,21 @@ package test
 
 import (
 	"context"
+	"hash/fnv"
+	"net/http"
 	"strconv"
+	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	internalai "github.com/usememos/memos/internal/ai"
+	"github.com/usememos/memos/internal/ai/aitest"
 	v1pb "github.com/usememos/memos/proto/gen/api/v1"
+	storepb "github.com/usememos/memos/proto/gen/store"
 	"github.com/usememos/memos/store"
 )
 
@@ -129,5 +136,92 @@ func TestSearchMemos(t *testing.T) {
 
 		_, err = ts.Service.SearchMemos(userCtx, &v1pb.SearchMemosRequest{Query: "  "})
 		require.Equal(t, codes.InvalidArgument, status.Code(err))
+	})
+}
+
+// semanticTestDimensions is the embedding size the semantic RPC test uses.
+const semanticTestDimensions = 8
+
+// semanticTestBuckets maps words to a shared semantic bucket so the
+// deterministic fake treats bucket-sharing words as related without sharing
+// a token.
+var semanticTestBuckets = map[string]int{
+	"owl":       0,
+	"hunts":     0,
+	"nocturnal": 0,
+	"predator":  0,
+	"kitchen":   1,
+	"simmer":    1,
+	"tomato":    1,
+	"sauce":     1,
+}
+
+// bucketEmbedFunc deterministically embeds texts as bag-of-words vectors
+// over the semantic buckets; unmapped words hash into a bucket.
+func bucketEmbedFunc(request internalai.EmbeddingRequest) (internalai.EmbeddingResponse, error) {
+	vectors := make([][]float32, 0, len(request.Inputs))
+	for _, input := range request.Inputs {
+		vector := make([]float32, semanticTestDimensions)
+		for _, word := range strings.FieldsFunc(strings.ToLower(input), func(r rune) bool { return !unicode.IsLetter(r) }) {
+			bucket, ok := semanticTestBuckets[word]
+			if !ok {
+				h := fnv.New32a()
+				_, _ = h.Write([]byte(word))
+				bucket = int(h.Sum32() % semanticTestDimensions)
+			}
+			vector[bucket]++
+		}
+		vectors = append(vectors, vector)
+	}
+	return internalai.EmbeddingResponse{Vectors: vectors, Dimensions: semanticTestDimensions}, nil
+}
+
+func TestSearchMemosSemanticRetrieval(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("a meaning-based query returns the relevant memo in fused results", func(t *testing.T) {
+		ts := NewTestService(t)
+		defer ts.Cleanup()
+
+		model := &aitest.Model{EmbedFunc: bucketEmbedFunc}
+		ts.Service.AIModelFactory = func(internalai.ProviderConfig, *http.Client) (internalai.Model, error) {
+			return model, nil
+		}
+
+		user, err := ts.CreateRegularUser(ctx, "alice")
+		require.NoError(t, err)
+		userCtx := ts.CreateUserContext(ctx, user.ID)
+
+		_, err = ts.Store.CreateMemo(ctx, &store.Memo{UID: "owl", CreatorID: user.ID, Content: "# Field Notes\n\nThe owl hunts field mice at dusk.", Visibility: store.Private})
+		require.NoError(t, err)
+		_, err = ts.Store.CreateMemo(ctx, &store.Memo{UID: "cooking", CreatorID: user.ID, Content: "# Kitchen\n\nSimmer the tomato sauce slowly.", Visibility: store.Private})
+		require.NoError(t, err)
+
+		_, err = ts.Store.UpsertInstanceSetting(ctx, &storepb.InstanceSetting{
+			Key: storepb.InstanceSettingKey_AI,
+			Value: &storepb.InstanceSetting_AiSetting{AiSetting: &storepb.InstanceAISetting{
+				Providers: []*storepb.AIProviderConfig{{
+					Id: "p", Title: "P", Type: storepb.AIProviderType_OPENAI,
+					Endpoint: "https://embed.example.com/v1", ApiKey: "sk-test",
+				}},
+				Embedding: &storepb.EmbeddingConfig{ProviderId: "p", Model: "embed-model", Dimensions: semanticTestDimensions},
+			}},
+		})
+		require.NoError(t, err)
+
+		// Build the search documents, then run the manually triggered
+		// one-shot indexing pass.
+		ts.Service.SearchService().RunOnce(ctx)
+		require.NoError(t, ts.Service.AISearchIndexer().RunOnce(ctx))
+
+		// The query shares no token with the memo, yet the memo ranks first
+		// through the fused semantic path.
+		response, err := ts.Service.SearchMemos(userCtx, &v1pb.SearchMemosRequest{Query: "nocturnal predator"})
+		require.NoError(t, err)
+		require.NotEmpty(t, response.GetResults())
+		require.Equal(t, "memos/owl", response.GetResults()[0].GetMemo())
+		require.Contains(t, response.GetResults()[0].GetRankReasons(), "semantic")
+		require.NotEmpty(t, response.GetResults()[0].GetSnippet())
+		require.NotEmpty(t, response.GetResults()[0].GetSourceHash())
 	})
 }

@@ -2,7 +2,7 @@
 
 Parent spec: [AI Semantic And Hybrid Retrieval](../../../docs/product-specs/ai-semantic-retrieval.md)
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: none
 
 ## Outcome
@@ -59,3 +59,5 @@ Embedding calls use the Stage 1 deterministic fakes and local HTTP fixtures; no 
 fresh-install and incremental-upgrade equivalence on all three drivers.
 
 ## Comments
+
+Implemented in this commit: `ai_index_generation` and `ai_index_chunk` migrations for SQLite/MySQL/PostgreSQL plus `LATEST.sql` updates, store CRUD, and migration-upgrade tests; little-endian L2-normalized float32 vector encoding with finiteness/dimension/byte-length validation in `internal/ai/vector.go`; generation fingerprint from provider type, sanitized endpoint identity, model, dimensions, and projection/chunker/normalization/vector-encoding versions (`server/ai/search/fingerprint.go`). Scaffolds visibly marked: A chunking (TODO issue 02, `server/ai/search/chunk.go`), B one-shot indexing (TODO issue 03, `server/ai/search/indexer.go`), C single-generation activation (TODO issue 04, `server/ai/search/indexer.go`), D naive interleave fusion (TODO issue 05, `server/ai/search/retrieve.go`, `server/ai/search/semantic.go`). Semantic path merges into `SearchMemos` via the Retriever seam; no embedding assignment leaves Stage 2 search and Chat unchanged. No diff under `server/router/mcp/`.

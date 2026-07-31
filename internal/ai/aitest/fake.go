@@ -16,7 +16,11 @@ type Model struct {
 	StreamError       error
 	EmbeddingResponse ai.EmbeddingResponse
 	EmbeddingError    error
-	ProbeErrors       map[ai.Capability]error
+	// EmbedFunc, when set, computes the embedding response per request,
+	// allowing deterministic per-input vectors. Its response goes through
+	// the same shape validation as EmbeddingResponse.
+	EmbedFunc   func(ai.EmbeddingRequest) (ai.EmbeddingResponse, error)
+	ProbeErrors map[ai.Capability]error
 
 	mu                 sync.Mutex
 	GenerationRequests []ai.GenerationRequest
@@ -67,10 +71,18 @@ func (model *Model) Embed(ctx context.Context, request ai.EmbeddingRequest) (ai.
 	if model.EmbeddingError != nil {
 		return ai.EmbeddingResponse{}, model.EmbeddingError
 	}
-	if err := ai.ValidateEmbeddingResponse(model.EmbeddingResponse, len(request.Inputs), request.Dimensions); err != nil {
+	response := model.EmbeddingResponse
+	if model.EmbedFunc != nil {
+		computed, err := model.EmbedFunc(request)
+		if err != nil {
+			return ai.EmbeddingResponse{}, err
+		}
+		response = computed
+	}
+	if err := ai.ValidateEmbeddingResponse(response, len(request.Inputs), request.Dimensions); err != nil {
 		return ai.EmbeddingResponse{}, err
 	}
-	return model.EmbeddingResponse, nil
+	return response, nil
 }
 
 // Probe records the requested capability and returns its configured error.

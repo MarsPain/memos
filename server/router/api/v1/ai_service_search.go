@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/usememos/memos/internal/ai/gateway"
 	"github.com/usememos/memos/internal/markdown"
 	v1pb "github.com/usememos/memos/proto/gen/api/v1"
 	serversearch "github.com/usememos/memos/server/ai/search"
@@ -94,6 +95,9 @@ func (s *APIV1Service) retriever() *serversearch.Retriever {
 			markdownService = defaultMarkdownService()
 		}
 		s.searchRetriever = serversearch.NewRetriever(s.Store, s.memoReadService(), markdownService, serversearch.DefaultBudgets())
+		s.searchRetriever.SetSemanticSearcher(serversearch.NewSemanticSearcher(s.Store, func() gateway.ModelFactory {
+			return s.AIModelFactory
+		}))
 	})
 	return s.searchRetriever
 }

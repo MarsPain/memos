@@ -68,6 +68,12 @@ type APIV1Service struct {
 	// service for the same struct-literal reason as aiChat.
 	searchRetrieverOnce sync.Once
 	searchRetriever     *search.Retriever
+
+	// aiIndexerOnce and aiIndexer lazily build the manually triggered
+	// embedding indexer (Scaffold B) for the same struct-literal reason as
+	// aiChat.
+	aiIndexerOnce sync.Once
+	aiIndexer     *search.Indexer
 }
 
 func NewAPIV1Service(secret string, profile *profile.Profile, store *store.Store) *APIV1Service {
@@ -124,6 +130,18 @@ func (s *APIV1Service) SearchService() *search.Service {
 		s.search = search.NewService(s.Store, s.memoReadService(), markdownService)
 	})
 	return s.search
+}
+
+// AISearchIndexer lazily builds the manually triggered embedding indexer
+// (Scaffold B; TODO(issue 03): runner-integrated reconciliation replaces the
+// manual trigger). Tests may override AIModelFactory before first use.
+func (s *APIV1Service) AISearchIndexer() *search.Indexer {
+	s.aiIndexerOnce.Do(func() {
+		s.aiIndexer = search.NewIndexer(s.Store, func() gateway.ModelFactory {
+			return s.AIModelFactory
+		})
+	})
+	return s.aiIndexer
 }
 
 // RegisterGateway registers the gRPC-Gateway and Connect handlers with the given Echo instance.

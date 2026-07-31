@@ -100,4 +100,14 @@ type Driver interface {
 	UpsertAISearchDocument(ctx context.Context, upsert *AISearchDocument) (*AISearchDocument, error)
 	ListAISearchDocuments(ctx context.Context, find *FindAISearchDocument) ([]*AISearchDocument, error)
 	DeleteAISearchDocument(ctx context.Context, delete *DeleteAISearchDocument) error
+
+	// AIIndexGeneration model related methods.
+	UpsertAIIndexGeneration(ctx context.Context, upsert *AIIndexGeneration) (*AIIndexGeneration, error)
+	ListAIIndexGenerations(ctx context.Context, find *FindAIIndexGeneration) ([]*AIIndexGeneration, error)
+	DeleteAIIndexGeneration(ctx context.Context, delete *DeleteAIIndexGeneration) error
+
+	// AIIndexChunk model related methods.
+	UpsertAIIndexChunk(ctx context.Context, upsert *AIIndexChunk) (*AIIndexChunk, error)
+	ListAIIndexChunks(ctx context.Context, find *FindAIIndexChunk) ([]*AIIndexChunk, error)
+	DeleteAIIndexChunk(ctx context.Context, delete *DeleteAIIndexChunk) error
 }

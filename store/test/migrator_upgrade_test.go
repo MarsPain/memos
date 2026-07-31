@@ -101,6 +101,14 @@ func TestMigrationFromV0262PreservesLegacyData(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, aiSearchDocumentExists, "ai_search_document table should be created")
 
+	aiIndexGenerationExists, err := tableExists(ctx, db, driver, "ai_index_generation")
+	require.NoError(t, err)
+	require.True(t, aiIndexGenerationExists, "ai_index_generation table should be created")
+
+	aiIndexChunkExists, err := tableExists(ctx, db, driver, "ai_index_chunk")
+	require.NoError(t, err)
+	require.True(t, aiIndexChunkExists, "ai_index_chunk table should be created")
+
 	share, err := ts.CreateMemoShare(ctx, &store.MemoShare{
 		UID:       "post-upgrade-share",
 		MemoID:    101,

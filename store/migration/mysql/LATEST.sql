@@ -173,3 +173,40 @@ CREATE TABLE `ai_search_document` (
   `updated_ts`            BIGINT       NOT NULL DEFAULT (UNIX_TIMESTAMP()),
   UNIQUE (`memo_id`)
 );
+
+-- ai_index_generation
+CREATE TABLE `ai_index_generation` (
+  `id`                INT           NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `fingerprint`       VARCHAR(255)  NOT NULL,
+  `provider_id`       VARCHAR(255)  NOT NULL,
+  `provider_type`     VARCHAR(64)   NOT NULL,
+  `endpoint_identity` VARCHAR(255)  NOT NULL,
+  `model`             VARCHAR(255)  NOT NULL,
+  `dimensions`        INT           NOT NULL,
+  `state`             VARCHAR(32)   NOT NULL,
+  `memo_total`        INT           NOT NULL DEFAULT 0,
+  `memo_indexed`      INT           NOT NULL DEFAULT 0,
+  `last_error`        VARCHAR(1024) NOT NULL DEFAULT '',
+  `created_ts`        BIGINT        NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  `updated_ts`        BIGINT        NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  UNIQUE (`fingerprint`)
+);
+
+-- ai_index_chunk
+CREATE TABLE `ai_index_chunk` (
+  `id`            INT        NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `generation_id` INT        NOT NULL,
+  `memo_id`       INT        NOT NULL,
+  `memo_revision` BIGINT     NOT NULL,
+  `chunk_ordinal` INT        NOT NULL,
+  `content_start` INT        NOT NULL,
+  `content_end`   INT        NOT NULL,
+  `source_start`  INT        NOT NULL,
+  `source_end`    INT        NOT NULL,
+  `vector`        MEDIUMBLOB NOT NULL,
+  `dimensions`    INT        NOT NULL,
+  `indexed_ts`    BIGINT     NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  UNIQUE (`generation_id`, `memo_id`, `memo_revision`, `chunk_ordinal`)
+);
+CREATE INDEX `idx_ai_index_chunk_generation_id_id` ON `ai_index_chunk`(`generation_id`, `id`);
+CREATE INDEX `idx_ai_index_chunk_memo_id` ON `ai_index_chunk`(`memo_id`);

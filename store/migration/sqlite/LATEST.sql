@@ -173,3 +173,39 @@ CREATE TABLE ai_search_document (
   created_ts            BIGINT  NOT NULL DEFAULT (strftime('%s', 'now')),
   updated_ts            BIGINT  NOT NULL DEFAULT (strftime('%s', 'now'))
 );
+
+-- ai_index_generation
+CREATE TABLE ai_index_generation (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  fingerprint       TEXT    NOT NULL UNIQUE,
+  provider_id       TEXT    NOT NULL,
+  provider_type     TEXT    NOT NULL,
+  endpoint_identity TEXT    NOT NULL,
+  model             TEXT    NOT NULL,
+  dimensions        INTEGER NOT NULL,
+  state             TEXT    NOT NULL,
+  memo_total        INTEGER NOT NULL DEFAULT 0,
+  memo_indexed      INTEGER NOT NULL DEFAULT 0,
+  last_error        TEXT    NOT NULL DEFAULT '',
+  created_ts        BIGINT  NOT NULL DEFAULT (strftime('%s', 'now')),
+  updated_ts        BIGINT  NOT NULL DEFAULT (strftime('%s', 'now'))
+);
+
+-- ai_index_chunk
+CREATE TABLE ai_index_chunk (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  generation_id INTEGER NOT NULL,
+  memo_id       INTEGER NOT NULL,
+  memo_revision BIGINT  NOT NULL,
+  chunk_ordinal INTEGER NOT NULL,
+  content_start INTEGER NOT NULL,
+  content_end   INTEGER NOT NULL,
+  source_start  INTEGER NOT NULL,
+  source_end    INTEGER NOT NULL,
+  vector        BLOB    NOT NULL,
+  dimensions    INTEGER NOT NULL,
+  indexed_ts    BIGINT  NOT NULL DEFAULT (strftime('%s', 'now')),
+  UNIQUE (generation_id, memo_id, memo_revision, chunk_ordinal)
+);
+CREATE INDEX idx_ai_index_chunk_generation_id_id ON ai_index_chunk(generation_id, id);
+CREATE INDEX idx_ai_index_chunk_memo_id ON ai_index_chunk(memo_id);
