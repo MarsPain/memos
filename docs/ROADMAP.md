@@ -36,6 +36,8 @@ budget exhaustion is reported honestly, and provider failure does not affect Mem
 
 ## Stage 3: Semantic and Hybrid Retrieval
 
+[Delivery specification](product-specs/ai-semantic-retrieval.md)
+
 - Add portable embedding generation/chunk storage and validated vector encoding over the Stage 2 search-document projection.
 - Add bounded reconciliation, atomic generation cutover, vector similarity, and hybrid ranking.
 - Add index status and rebuild controls.

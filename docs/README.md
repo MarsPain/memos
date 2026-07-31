@@ -22,6 +22,7 @@ This directory is the canonical record for product, architecture, security, and 
 - [Product specification](product-specs/ai-native-notes.md)
 - [Stage 1 — AI Foundation specification](product-specs/ai-foundation.md)
 - [Stage 2 — AI Chat and Retrieval specification](product-specs/ai-chat-retrieval.md)
+- [Stage 3 — AI Semantic and Hybrid Retrieval specification](product-specs/ai-semantic-retrieval.md)
 
 ## Documentation Collections
 

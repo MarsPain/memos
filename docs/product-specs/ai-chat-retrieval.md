@@ -1,6 +1,6 @@
 # AI Chat And Retrieval Product Specification
 
-**Status:** Approved
+**Status:** Implemented
 **Parent product spec:** [AI-Native Notes](ai-native-notes.md)
 **Architecture:** [AI-Native Memos Architecture](../design-docs/ai-native-notes.md)
 **Roadmap scope:** [Stage 2 — Read-Only Chat and Fuzzy Retrieval](../ROADMAP.md#stage-2-read-only-chat-and-fuzzy-retrieval)
