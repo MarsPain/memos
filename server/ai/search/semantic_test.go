@@ -1,10 +1,14 @@
 package search
 
 import (
+	"cmp"
 	"context"
 	"hash/fnv"
 	"net/http"
+	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -269,4 +273,175 @@ func TestSemanticSearcherIgnoresForeignFingerprint(t *testing.T) {
 	matches, err := NewSemanticSearcher(fixture.store, embedModelFactory(model)).Search(ctx, "nocturnal predator")
 	require.NoError(t, err)
 	require.Empty(t, matches)
+}
+
+// longOwlMemoContent builds a memo that projects to a multi-chunk document:
+// filler paragraphs in one semantic bucket, then many owl paragraphs in
+// another, so the owl text lands in the later chunks.
+func longOwlMemoContent() string {
+	paragraphs := []string{}
+	for i := 0; i < 60; i++ {
+		paragraphs = append(paragraphs, "kitchen simmer tomato sauce")
+	}
+	for i := 0; i < 100; i++ {
+		paragraphs = append(paragraphs, "The owl hunts field mice at dusk.")
+	}
+	return strings.Join(paragraphs, "\n\n")
+}
+
+// activeGeneration returns the test's single active generation.
+func activeGeneration(ctx context.Context, t *testing.T, st *store.Store) *store.AIIndexGeneration {
+	t.Helper()
+	state := generationStateActive
+	generation, err := st.GetAIIndexGeneration(ctx, &store.FindAIIndexGeneration{State: &state})
+	require.NoError(t, err)
+	require.NotNil(t, generation)
+	return generation
+}
+
+// listMemoChunks returns the memo's index chunk rows in chunk-ordinal order.
+func listMemoChunks(ctx context.Context, t *testing.T, st *store.Store, generationID, memoID int32) []*store.AIIndexChunk {
+	t.Helper()
+	chunks, err := st.ListAIIndexChunks(ctx, &store.FindAIIndexChunk{GenerationID: &generationID, MemoID: &memoID})
+	require.NoError(t, err)
+	slices.SortFunc(chunks, func(a, b *store.AIIndexChunk) int { return cmp.Compare(a.ChunkOrdinal, b.ChunkOrdinal) })
+	return chunks
+}
+
+func TestIndexerEmbedsEveryChunkOfLongMemo(t *testing.T) {
+	ctx := context.Background()
+	fixture := newSearchTestFixture(ctx, t)
+
+	m := fixture.createMemo(ctx, t, "long", longOwlMemoContent())
+	fixture.service.RunOnce(ctx)
+
+	model := &aitest.Model{EmbedFunc: bucketEmbedFunc}
+	configureEmbeddingSetting(ctx, t, fixture.store, semanticTestDimensions)
+	require.NoError(t, NewIndexer(fixture.store, embedModelFactory(model)).RunOnce(ctx))
+
+	document := fixture.getDocument(ctx, t, m.ID)
+	require.NotNil(t, document)
+	require.Greater(t, len(document.Content), chunkTargetContentBytes, "the memo projects to a multi-chunk document")
+
+	generation := activeGeneration(ctx, t, fixture.store)
+	chunks := listMemoChunks(ctx, t, fixture.store, generation.ID, m.ID)
+	require.Greater(t, len(chunks), 1, "a long memo indexes as multiple chunks")
+
+	// The stored chunks are exactly the deterministic chunker's output:
+	// sequential ordinals over contiguous content ranges covering the whole
+	// document, each at the memo's current revision.
+	position := 0
+	for i, chunk := range chunks {
+		require.Equal(t, int32(i), chunk.ChunkOrdinal)
+		require.Equal(t, position, int(chunk.ContentStart))
+		require.Equal(t, m.UpdatedTs, chunk.MemoRevision)
+		require.Equal(t, int32(semanticTestDimensions), chunk.Dimensions)
+		position = int(chunk.ContentEnd)
+	}
+	require.Equal(t, len(document.Content), position)
+
+	// The last chunk covers only owl paragraphs, and its stored source span
+	// points at the owl region of the source memo.
+	last := chunks[len(chunks)-1]
+	require.Contains(t, document.Content[last.ContentStart:], "owl hunts field mice")
+	owlRegionStart := strings.Index(longOwlMemoContent(), "The owl hunts field mice")
+	require.GreaterOrEqual(t, last.SourceStart, int32(owlRegionStart))
+	require.LessOrEqual(t, last.SourceEnd, int32(len(longOwlMemoContent())))
+
+	// Every chunk was embedded exactly once.
+	embedded := 0
+	for _, request := range model.EmbeddingRequests {
+		embedded += len(request.Inputs)
+	}
+	require.Equal(t, len(chunks), embedded)
+}
+
+func TestSemanticHitOnLaterChunkMapsToSourceSpan(t *testing.T) {
+	ctx := context.Background()
+	fixture := newSearchTestFixture(ctx, t)
+
+	fixture.createMemo(ctx, t, "long", longOwlMemoContent())
+	fixture.service.RunOnce(ctx)
+
+	model := &aitest.Model{EmbedFunc: bucketEmbedFunc}
+	configureEmbeddingSetting(ctx, t, fixture.store, semanticTestDimensions)
+	require.NoError(t, NewIndexer(fixture.store, embedModelFactory(model)).RunOnce(ctx))
+
+	// The query matches only the owl passage's bucket, which lives in the
+	// later chunks: the semantic hit maps back to the owl region of the
+	// source for its snippet.
+	retriever := fixture.newTestRetriever()
+	retriever.SetSemanticSearcher(NewSemanticSearcher(fixture.store, embedModelFactory(model)))
+	outcome, err := retriever.Search(ctx, fixture.owner, Query{Text: "nocturnal predator"})
+	require.NoError(t, err)
+	require.NotEmpty(t, outcome.Hits)
+	require.Equal(t, "long", outcome.Hits[0].MemoUID)
+	require.Contains(t, outcome.Hits[0].RankReasons, RankReasonSemantic)
+	require.Contains(t, outcome.Hits[0].Snippet, "owl hunts field mice")
+}
+
+func TestIndexerReplacesStaleChunksOnMemoEdit(t *testing.T) {
+	ctx := context.Background()
+	fixture := newSearchTestFixture(ctx, t)
+
+	m := fixture.createMemo(ctx, t, "long", "the owl hunts at dusk")
+	fixture.service.RunOnce(ctx)
+
+	model := &aitest.Model{EmbedFunc: bucketEmbedFunc}
+	configureEmbeddingSetting(ctx, t, fixture.store, semanticTestDimensions)
+	indexer := NewIndexer(fixture.store, embedModelFactory(model))
+	require.NoError(t, indexer.RunOnce(ctx))
+	firstRevision := m.UpdatedTs
+
+	// The memo grows into a multi-chunk document at a new source revision
+	// (the memo API bumps UpdatedTs on content updates).
+	updated := longOwlMemoContent()
+	updatedTs := time.Now().Unix() + 1
+	require.NoError(t, fixture.store.UpdateMemo(ctx, &store.UpdateMemo{ID: m.ID, Content: &updated, UpdatedTs: &updatedTs}))
+	fixture.service.RunOnce(ctx)
+	require.NoError(t, indexer.RunOnce(ctx))
+
+	// Every stored chunk comes from the new revision; no chunk of the
+	// superseded revision survives to map a hit to an outdated source span.
+	generation := activeGeneration(ctx, t, fixture.store)
+	chunks := listMemoChunks(ctx, t, fixture.store, generation.ID, m.ID)
+	require.Greater(t, len(chunks), 1)
+	document := fixture.getDocument(ctx, t, m.ID)
+	require.NotEqual(t, firstRevision, document.MemoUpdatedTs)
+	for _, chunk := range chunks {
+		require.Equal(t, document.MemoUpdatedTs, chunk.MemoRevision)
+	}
+	require.Equal(t, len(chunkDocument(document)), len(chunks))
+}
+
+func TestIndexerReRunKeepsChunkOrdinalsAndSpans(t *testing.T) {
+	ctx := context.Background()
+	fixture := newSearchTestFixture(ctx, t)
+
+	m := fixture.createMemo(ctx, t, "long", longOwlMemoContent())
+	fixture.service.RunOnce(ctx)
+
+	model := &aitest.Model{EmbedFunc: bucketEmbedFunc}
+	configureEmbeddingSetting(ctx, t, fixture.store, semanticTestDimensions)
+	indexer := NewIndexer(fixture.store, embedModelFactory(model))
+	require.NoError(t, indexer.RunOnce(ctx))
+
+	generation := activeGeneration(ctx, t, fixture.store)
+	before := listMemoChunks(ctx, t, fixture.store, generation.ID, m.ID)
+	require.Greater(t, len(before), 1)
+	embedCalls := len(model.EmbeddingRequests)
+
+	// A repeated pass over unchanged content embeds nothing, and the chunk
+	// ordinals and spans stay identical.
+	require.NoError(t, indexer.RunOnce(ctx))
+	require.Len(t, model.EmbeddingRequests, embedCalls)
+	after := listMemoChunks(ctx, t, fixture.store, generation.ID, m.ID)
+	require.Len(t, after, len(before))
+	for i := range before {
+		require.Equal(t, before[i].ChunkOrdinal, after[i].ChunkOrdinal)
+		require.Equal(t, before[i].ContentStart, after[i].ContentStart)
+		require.Equal(t, before[i].ContentEnd, after[i].ContentEnd)
+		require.Equal(t, before[i].SourceStart, after[i].SourceStart)
+		require.Equal(t, before[i].SourceEnd, after[i].SourceEnd)
+	}
 }

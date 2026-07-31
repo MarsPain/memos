@@ -2,7 +2,7 @@
 
 Parent spec: [AI Semantic And Hybrid Retrieval](../../../docs/product-specs/ai-semantic-retrieval.md)
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by: 01
 
 ## Outcome
@@ -43,3 +43,5 @@ Chunking fixtures cover boundary cases: empty documents, documents at exactly th
 determinism across repeated runs.
 
 ## Comments
+
+Implemented in this commit: versioned span-derived chunker replaces Scaffold A (`server/ai/search/chunk.go`, ChunkerVersion bumped 1 → 2 since the chunking rules changed, which re-fingerprints generations). Chunk boundaries derive from the Stage 2 projection spans: consecutive spans pack into chunks up to a 1,536-byte target, a span larger than the chunk size splits at rune boundaries, and every chunk maps back to source bytes through the same `mapContentPosition` span mapping lexical retrieval uses (uncovered gap edges fall back to the nearest covered position). Bounded per-Memo chunk count (64): oversized Memos re-chunk at a deterministically escalated size, so coverage is always total — chunk texts concatenate to the full projected content, never silently truncated. The one-shot pass (Scaffold B, unchanged) now embeds every chunk of each stale document in batches of 16, counts a document indexed only when all its chunks commit, prunes the document's superseded-revision chunks only after the fresh set commits (a failed re-embed never leaves the serving generation without the document's chunks), and still rejects a whole batch on dimension/byte-length mismatch before any commit. Determinism verified: repeated indexing of unchanged content produces identical chunk ordinals and spans and embeds nothing again. Tests: chunker boundary fixtures (empty, exactly at chunk target and count cap, oversized memo, multi-paragraph span packing, gap edges, rune-boundary splits, determinism) plus end-to-end fixtures (long memo indexed as multiple chunks, semantic hit on a later chunk maps to the owl source region, stale-chunk replacement on memo edit, re-run span stability). `go test -race ./server/...` and `go test -race ./internal/...` pass; no store or migration changes; no diff under `server/router/mcp/`.
