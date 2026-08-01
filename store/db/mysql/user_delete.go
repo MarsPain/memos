@@ -120,6 +120,9 @@ func deleteUserTargetsTx(ctx context.Context, tx *sql.Tx, userID int32, targets 
 	if err := deleteAISearchDocumentsTx(ctx, tx, memoIDs); err != nil {
 		return err
 	}
+	if err := deleteAIIndexChunksTx(ctx, tx, memoIDs); err != nil {
+		return err
+	}
 	if err := deleteAIConversationsTx(ctx, tx, userID); err != nil {
 		return err
 	}
@@ -498,6 +501,19 @@ func deleteAISearchDocumentsTx(ctx context.Context, tx *sql.Tx, memoIDs []int32)
 	for _, batch := range deleteUserBatches(memoIDs, deleteUserBatchSize) {
 		clause, args := deleteUserInClause(1, batch)
 		if _, err := tx.ExecContext(ctx, `DELETE FROM ai_search_document WHERE memo_id IN `+clause, args...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// deleteAIIndexChunksTx removes the derived embedding index chunks of the
+// deleted memos from every generation. Chunks are memo-derived data; they
+// leave with the memo rather than waiting for reconciliation to sweep them.
+func deleteAIIndexChunksTx(ctx context.Context, tx *sql.Tx, memoIDs []int32) error {
+	for _, batch := range deleteUserBatches(memoIDs, deleteUserBatchSize) {
+		clause, args := deleteUserInClause(1, batch)
+		if _, err := tx.ExecContext(ctx, `DELETE FROM ai_index_chunk WHERE memo_id IN `+clause, args...); err != nil {
 			return err
 		}
 	}

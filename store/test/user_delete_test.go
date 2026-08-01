@@ -188,6 +188,9 @@ func TestDeleteUserCleansRelatedData(t *testing.T) {
 
 	upsertTestingAISearchDocument(ctx, t, ts, ownMemo.ID, "owner memo")
 	upsertTestingAISearchDocument(ctx, t, ts, peerMemo.ID, "peer memo")
+	upsertTestingAIIndexChunk(ctx, t, ts, 1, ownMemo.ID, 0)
+	upsertTestingAIIndexChunk(ctx, t, ts, 2, ownMemo.ID, 0)
+	upsertTestingAIIndexChunk(ctx, t, ts, 1, peerMemo.ID, 0)
 
 	_, err = ts.DeleteUser(ctx, &store.DeleteUser{ID: user.ID})
 	require.NoError(t, err)
@@ -274,4 +277,13 @@ func TestDeleteUserCleansRelatedData(t *testing.T) {
 	keptDocument, err := ts.GetAISearchDocument(ctx, &store.FindAISearchDocument{MemoID: &peerMemo.ID})
 	require.NoError(t, err)
 	require.NotNil(t, keptDocument)
+
+	// The deleted memos' derived chunks leave with them across every
+	// generation; the peer memo's chunks stay.
+	deletedChunks, err := ts.ListAIIndexChunks(ctx, &store.FindAIIndexChunk{MemoID: &ownMemo.ID})
+	require.NoError(t, err)
+	require.Empty(t, deletedChunks)
+	keptChunks, err := ts.ListAIIndexChunks(ctx, &store.FindAIIndexChunk{MemoID: &peerMemo.ID})
+	require.NoError(t, err)
+	require.Len(t, keptChunks, 1)
 }

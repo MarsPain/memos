@@ -205,6 +205,7 @@ CREATE TABLE `ai_index_chunk` (
   `source_end`    INT        NOT NULL,
   `vector`        MEDIUMBLOB NOT NULL,
   `dimensions`    INT        NOT NULL,
+  `content_hash`  VARCHAR(64) NOT NULL DEFAULT '',
   `indexed_ts`    BIGINT     NOT NULL DEFAULT (UNIX_TIMESTAMP()),
   UNIQUE (`generation_id`, `memo_id`, `memo_revision`, `chunk_ordinal`)
 );

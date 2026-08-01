@@ -204,6 +204,7 @@ CREATE TABLE ai_index_chunk (
   source_end    INTEGER NOT NULL,
   vector        BLOB    NOT NULL,
   dimensions    INTEGER NOT NULL,
+  content_hash  TEXT    NOT NULL DEFAULT '',
   indexed_ts    BIGINT  NOT NULL DEFAULT (strftime('%s', 'now')),
   UNIQUE (generation_id, memo_id, memo_revision, chunk_ordinal)
 );

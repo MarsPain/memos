@@ -189,14 +189,14 @@ func TestPerItemBackoff(t *testing.T) {
 	require.Nil(t, fixture.getDocument(ctx, t, m.ID))
 
 	// Once the backoff expires the sync runs again.
-	fixture.service.failures[m.ID].nextRetry = time.Now().Add(-time.Second)
+	fixture.service.backoff.failures[m.ID].nextRetry = time.Now().Add(-time.Second)
 	require.True(t, fixture.service.retryAllowed(m.ID))
 	fixture.service.syncMemo(ctx, m)
 	require.NotNil(t, fixture.getDocument(ctx, t, m.ID))
 
 	// Success cleared the backoff record.
 	fixture.service.mu.Lock()
-	_, failed := fixture.service.failures[m.ID]
+	_, failed := fixture.service.backoff.failures[m.ID]
 	fixture.service.mu.Unlock()
 	require.False(t, failed)
 }

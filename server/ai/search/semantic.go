@@ -139,19 +139,24 @@ func (s *SemanticSearcher) factory() gateway.ModelFactory {
 }
 
 // semanticMatch is one memo ranked by the semantic scan: its best chunk's
-// cosine similarity and the chunk's start within the projected content.
+// cosine similarity, the chunk's start within the projected content, and the
+// source revision and content hash the chunk was built from, so callers can
+// drop matches built from a superseded document.
 type semanticMatch struct {
-	memoID     int32
-	score      float64
-	contentPos int32
+	memoID       int32
+	score        float64
+	contentPos   int32
+	memoRevision int64
+	contentHash  string
 }
 
 // Search returns the memos whose chunks are nearest to the query text in the
-// active generation, best first. It returns nil when semantic retrieval is
-// not callable: no embedding assignment, no active generation matching the
-// current fingerprint, or a dimension mismatch between the query vector and
-// the generation. An error means the semantic path failed; callers degrade
-// to lexical results.
+// active generation, best first. Matches built from a superseded source
+// revision or content hash are dropped, so stale indexed text never serves.
+// It returns nil when semantic retrieval is not callable: no embedding
+// assignment, no active generation matching the current fingerprint, or a
+// dimension mismatch between the query vector and the generation. An error
+// means the semantic path failed; callers degrade to lexical results.
 func (s *SemanticSearcher) Search(ctx context.Context, queryText string) ([]semanticMatch, error) {
 	setting, err := s.store.GetInstanceAISetting(ctx)
 	if err != nil {
@@ -224,7 +229,7 @@ func (s *SemanticSearcher) Search(ctx context.Context, queryText string) ([]sema
 			score := dot(queryVector, vector)
 			current, ok := best[chunk.MemoID]
 			if !ok || score > current.score {
-				best[chunk.MemoID] = &semanticMatch{memoID: chunk.MemoID, score: score, contentPos: chunk.ContentStart}
+				best[chunk.MemoID] = &semanticMatch{memoID: chunk.MemoID, score: score, contentPos: chunk.ContentStart, memoRevision: chunk.MemoRevision, contentHash: chunk.ContentHash}
 			}
 		}
 		if len(chunks) < limit {
@@ -240,7 +245,22 @@ func (s *SemanticSearcher) Search(ctx context.Context, queryText string) ([]sema
 	if len(matches) > semanticMaxCandidates {
 		matches = matches[:semanticMaxCandidates]
 	}
-	return matches, nil
+
+	// Staleness guard: a chunk built from a superseded source revision or
+	// content hash never serves — the memo returns once the indexer catches
+	// up. The citation reread remains the last line of defense.
+	current := make([]semanticMatch, 0, len(matches))
+	for _, match := range matches {
+		document, err := s.store.GetAISearchDocument(ctx, &store.FindAISearchDocument{MemoID: &match.memoID})
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to recheck search document")
+		}
+		if document == nil || document.MemoUpdatedTs != match.memoRevision || document.ContentHash != match.contentHash {
+			continue
+		}
+		current = append(current, match)
+	}
+	return current, nil
 }
 
 // dot returns the dot product of two equal-length vectors. Both vectors are
@@ -294,11 +314,21 @@ func (r *Retriever) fuseSemantic(ctx context.Context, queryText string, tagFilte
 	semantic := []candidate{}
 	for _, match := range matches {
 		if index, ok := lexicalByMemo[match.memoID]; ok {
-			lexical[index].reasons = appendReason(lexical[index].reasons, RankReasonSemantic)
+			// A match built from a superseded document adds nothing: the memo
+			// keeps its lexical hit but not the semantic corroboration.
+			if matchCurrent(lexical[index].document, match) {
+				lexical[index].reasons = appendReason(lexical[index].reasons, RankReasonSemantic)
+			}
 			continue
 		}
 		document, err := r.store.GetAISearchDocument(ctx, &store.FindAISearchDocument{MemoID: &match.memoID})
 		if err != nil || document == nil {
+			continue
+		}
+		if !matchCurrent(document, match) {
+			// The winning chunk was built from a superseded revision or hash:
+			// stale indexed text never serves; the memo returns once the
+			// indexer catches up.
 			continue
 		}
 		if document.ProjectionVersion != ProjectionVersion || document.NormalizationVersion != NormalizationVersion {
@@ -314,7 +344,21 @@ func (r *Retriever) fuseSemantic(ctx context.Context, queryText string, tagFilte
 			anchor:   semanticAnchor(document, match.contentPos),
 		})
 	}
+	return mergeInterleaved(lexical, semantic, budgets)
+}
 
+// matchCurrent reports whether a semantic match was built from the document's
+// current source revision and content hash.
+func matchCurrent(document *store.AISearchDocument, match semanticMatch) bool {
+	return document.MemoUpdatedTs == match.memoRevision && document.ContentHash == match.contentHash
+}
+
+// mergeInterleaved merges lexical and semantic candidates with naive
+// interleaving: the two lists alternate and the merged list stays within the
+// candidate budget.
+// TODO(issue 05): replaced together with the fusion caller by ordinal-rank
+// fusion.
+func mergeInterleaved(lexical, semantic []candidate, budgets Budgets) []candidate {
 	merged := make([]candidate, 0, min(len(lexical)+len(semantic), budgets.MaxCandidates))
 	lexicalIndex, semanticIndex := 0, 0
 	for len(merged) < budgets.MaxCandidates && (lexicalIndex < len(lexical) || semanticIndex < len(semantic)) {

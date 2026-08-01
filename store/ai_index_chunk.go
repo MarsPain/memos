@@ -6,11 +6,12 @@ import (
 
 // AIIndexChunk is one embedded chunk of a Memo search document within a
 // generation. Vector is the little-endian float32 embedding of the chunk
-// (internal/ai vector encoding version 1); MemoRevision records the search
-// document revision the chunk was built from. ContentStart/ContentEnd and
-// SourceStart/SourceEnd map the chunk back to the projected content and the
-// source memo content. Chunks are derived data: rebuildable from the source
-// search documents and deletable without touching memos.
+// (internal/ai vector encoding version 1); MemoRevision and ContentHash
+// record the search document revision and content hash the chunk was built
+// from, so reconciliation detects staleness from either. ContentStart/
+// ContentEnd and SourceStart/SourceEnd map the chunk back to the projected
+// content and the source memo content. Chunks are derived data: rebuildable
+// from the source search documents and deletable without touching memos.
 type AIIndexChunk struct {
 	ID           int32
 	GenerationID int32
@@ -23,6 +24,7 @@ type AIIndexChunk struct {
 	SourceEnd    int32
 	Vector       []byte
 	Dimensions   int32
+	ContentHash  string
 	IndexedTs    int64
 }
 

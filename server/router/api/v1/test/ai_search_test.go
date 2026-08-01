@@ -176,6 +176,26 @@ func bucketEmbedFunc(request internalai.EmbeddingRequest) (internalai.EmbeddingR
 	return internalai.EmbeddingResponse{Vectors: vectors, Dimensions: semanticTestDimensions}, nil
 }
 
+// configureSemanticEmbedding points the service's model factory at the fake
+// model and assigns the embedding capability.
+func configureSemanticEmbedding(ctx context.Context, t *testing.T, ts *TestService, model internalai.Model) {
+	t.Helper()
+	ts.Service.AIModelFactory = func(internalai.ProviderConfig, *http.Client) (internalai.Model, error) {
+		return model, nil
+	}
+	_, err := ts.Store.UpsertInstanceSetting(ctx, &storepb.InstanceSetting{
+		Key: storepb.InstanceSettingKey_AI,
+		Value: &storepb.InstanceSetting_AiSetting{AiSetting: &storepb.InstanceAISetting{
+			Providers: []*storepb.AIProviderConfig{{
+				Id: "p", Title: "P", Type: storepb.AIProviderType_OPENAI,
+				Endpoint: "https://embed.example.com/v1", ApiKey: "sk-test",
+			}},
+			Embedding: &storepb.EmbeddingConfig{ProviderId: "p", Model: "embed-model", Dimensions: semanticTestDimensions},
+		}},
+	})
+	require.NoError(t, err)
+}
+
 func TestSearchMemosSemanticRetrieval(t *testing.T) {
 	ctx := context.Background()
 
@@ -183,10 +203,7 @@ func TestSearchMemosSemanticRetrieval(t *testing.T) {
 		ts := NewTestService(t)
 		defer ts.Cleanup()
 
-		model := &aitest.Model{EmbedFunc: bucketEmbedFunc}
-		ts.Service.AIModelFactory = func(internalai.ProviderConfig, *http.Client) (internalai.Model, error) {
-			return model, nil
-		}
+		configureSemanticEmbedding(ctx, t, ts, &aitest.Model{EmbedFunc: bucketEmbedFunc})
 
 		user, err := ts.CreateRegularUser(ctx, "alice")
 		require.NoError(t, err)
@@ -197,22 +214,10 @@ func TestSearchMemosSemanticRetrieval(t *testing.T) {
 		_, err = ts.Store.CreateMemo(ctx, &store.Memo{UID: "cooking", CreatorID: user.ID, Content: "# Kitchen\n\nSimmer the tomato sauce slowly.", Visibility: store.Private})
 		require.NoError(t, err)
 
-		_, err = ts.Store.UpsertInstanceSetting(ctx, &storepb.InstanceSetting{
-			Key: storepb.InstanceSettingKey_AI,
-			Value: &storepb.InstanceSetting_AiSetting{AiSetting: &storepb.InstanceAISetting{
-				Providers: []*storepb.AIProviderConfig{{
-					Id: "p", Title: "P", Type: storepb.AIProviderType_OPENAI,
-					Endpoint: "https://embed.example.com/v1", ApiKey: "sk-test",
-				}},
-				Embedding: &storepb.EmbeddingConfig{ProviderId: "p", Model: "embed-model", Dimensions: semanticTestDimensions},
-			}},
-		})
-		require.NoError(t, err)
-
-		// Build the search documents, then run the manually triggered
-		// one-shot indexing pass.
+		// The runner catches up on its own: the search-document refresh
+		// drives the embedding indexer through the refresh hooks, with no
+		// manual indexing trigger.
 		ts.Service.SearchService().RunOnce(ctx)
-		require.NoError(t, ts.Service.AISearchIndexer().RunOnce(ctx))
 
 		// The query shares no token with the memo, yet the memo ranks first
 		// through the fused semantic path.
@@ -223,5 +228,83 @@ func TestSearchMemosSemanticRetrieval(t *testing.T) {
 		require.Contains(t, response.GetResults()[0].GetRankReasons(), "semantic")
 		require.NotEmpty(t, response.GetResults()[0].GetSnippet())
 		require.NotEmpty(t, response.GetResults()[0].GetSourceHash())
+	})
+
+	t.Run("a memo written through the API reaches semantic results after the runner catches up", func(t *testing.T) {
+		ts := NewTestService(t)
+		defer ts.Cleanup()
+
+		configureSemanticEmbedding(ctx, t, ts, &aitest.Model{EmbedFunc: bucketEmbedFunc})
+
+		user, err := ts.CreateRegularUser(ctx, "alice")
+		require.NoError(t, err)
+		userCtx := ts.CreateUserContext(ctx, user.ID)
+
+		// The memo write path only emits an invalidation signal; projection,
+		// chunking, and embedding stay outside of it.
+		created, err := ts.Service.CreateMemo(userCtx, &v1pb.CreateMemoRequest{
+			Memo: &v1pb.Memo{
+				Content:    "# Field Notes\n\nThe owl hunts field mice at dusk.",
+				Visibility: v1pb.Visibility_PRIVATE,
+			},
+		})
+		require.NoError(t, err)
+
+		// The runner catches up with no manual trigger.
+		ts.Service.SearchService().RunOnce(ctx)
+
+		response, err := ts.Service.SearchMemos(userCtx, &v1pb.SearchMemosRequest{Query: "nocturnal predator"})
+		require.NoError(t, err)
+		require.NotEmpty(t, response.GetResults())
+		require.Equal(t, created.GetName(), response.GetResults()[0].GetMemo())
+		require.Contains(t, response.GetResults()[0].GetRankReasons(), "semantic")
+	})
+
+	t.Run("memo deletion removes derived chunks from every generation", func(t *testing.T) {
+		ts := NewTestService(t)
+		defer ts.Cleanup()
+
+		configureSemanticEmbedding(ctx, t, ts, &aitest.Model{EmbedFunc: bucketEmbedFunc})
+
+		user, err := ts.CreateRegularUser(ctx, "alice")
+		require.NoError(t, err)
+		userCtx := ts.CreateUserContext(ctx, user.ID)
+
+		memo, err := ts.Store.CreateMemo(ctx, &store.Memo{UID: "owl", CreatorID: user.ID, Content: "# Field Notes\n\nThe owl hunts field mice at dusk.", Visibility: store.Private})
+		require.NoError(t, err)
+
+		ts.Service.SearchService().RunOnce(ctx)
+		chunks, err := ts.Store.ListAIIndexChunks(ctx, &store.FindAIIndexChunk{MemoID: &memo.ID})
+		require.NoError(t, err)
+		require.NotEmpty(t, chunks)
+
+		// A second generation also holds chunks of the memo: deletion must
+		// cover every generation, not only the serving one.
+		other, err := ts.Store.UpsertAIIndexGeneration(ctx, &store.AIIndexGeneration{
+			Fingerprint: "other-fingerprint",
+			ProviderID:  "p",
+			Model:       "embed-model",
+			Dimensions:  semanticTestDimensions,
+			State:       "ACTIVE",
+		})
+		require.NoError(t, err)
+		_, err = ts.Store.UpsertAIIndexChunk(ctx, &store.AIIndexChunk{
+			GenerationID: other.ID,
+			MemoID:       memo.ID,
+			MemoRevision: memo.UpdatedTs,
+			ChunkOrdinal: 0,
+			Vector:       []byte{1, 2, 3, 4},
+			Dimensions:   1,
+		})
+		require.NoError(t, err)
+
+		_, err = ts.Service.DeleteMemo(userCtx, &v1pb.DeleteMemoRequest{Name: "memos/owl"})
+		require.NoError(t, err)
+
+		// The deletion signal drives the cleanup once the runner catches up.
+		ts.Service.SearchService().RunOnce(ctx)
+		chunks, err = ts.Store.ListAIIndexChunks(ctx, &store.FindAIIndexChunk{MemoID: &memo.ID})
+		require.NoError(t, err)
+		require.Empty(t, chunks)
 	})
 }

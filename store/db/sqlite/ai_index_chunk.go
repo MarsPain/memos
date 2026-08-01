@@ -11,9 +11,9 @@ import (
 )
 
 func (d *DB) UpsertAIIndexChunk(ctx context.Context, upsert *store.AIIndexChunk) (*store.AIIndexChunk, error) {
-	fields := []string{"`generation_id`", "`memo_id`", "`memo_revision`", "`chunk_ordinal`", "`content_start`", "`content_end`", "`source_start`", "`source_end`", "`vector`", "`dimensions`"}
-	placeholder := []string{"?", "?", "?", "?", "?", "?", "?", "?", "?", "?"}
-	args := []any{upsert.GenerationID, upsert.MemoID, upsert.MemoRevision, upsert.ChunkOrdinal, upsert.ContentStart, upsert.ContentEnd, upsert.SourceStart, upsert.SourceEnd, upsert.Vector, upsert.Dimensions}
+	fields := []string{"`generation_id`", "`memo_id`", "`memo_revision`", "`chunk_ordinal`", "`content_start`", "`content_end`", "`source_start`", "`source_end`", "`vector`", "`dimensions`", "`content_hash`"}
+	placeholder := []string{"?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?"}
+	args := []any{upsert.GenerationID, upsert.MemoID, upsert.MemoRevision, upsert.ChunkOrdinal, upsert.ContentStart, upsert.ContentEnd, upsert.SourceStart, upsert.SourceEnd, upsert.Vector, upsert.Dimensions, upsert.ContentHash}
 
 	stmt := "INSERT INTO `ai_index_chunk` (" + strings.Join(fields, ", ") + ") VALUES (" + strings.Join(placeholder, ", ") + ")" +
 		" ON CONFLICT(`generation_id`, `memo_id`, `memo_revision`, `chunk_ordinal`) DO UPDATE SET" +
@@ -23,6 +23,7 @@ func (d *DB) UpsertAIIndexChunk(ctx context.Context, upsert *store.AIIndexChunk)
 		" `source_end` = `excluded`.`source_end`," +
 		" `vector` = `excluded`.`vector`," +
 		" `dimensions` = `excluded`.`dimensions`," +
+		" `content_hash` = `excluded`.`content_hash`," +
 		" `indexed_ts` = strftime('%s', 'now')" +
 		" RETURNING `id`, `indexed_ts`"
 	if err := d.db.QueryRowContext(ctx, stmt, args...).Scan(
@@ -51,7 +52,7 @@ func (d *DB) ListAIIndexChunks(ctx context.Context, find *store.FindAIIndexChunk
 		where, args = append(where, "`id` > ?"), append(args, *find.IDGreaterThan)
 	}
 
-	query := "SELECT `id`, `generation_id`, `memo_id`, `memo_revision`, `chunk_ordinal`, `content_start`, `content_end`, `source_start`, `source_end`, `vector`, `dimensions`, `indexed_ts` FROM `ai_index_chunk` WHERE " + strings.Join(where, " AND ") + " ORDER BY `id` ASC"
+	query := "SELECT `id`, `generation_id`, `memo_id`, `memo_revision`, `chunk_ordinal`, `content_start`, `content_end`, `source_start`, `source_end`, `vector`, `dimensions`, `content_hash`, `indexed_ts` FROM `ai_index_chunk` WHERE " + strings.Join(where, " AND ") + " ORDER BY `id` ASC"
 	if find.Limit != nil {
 		query = fmt.Sprintf("%s LIMIT %d", query, *find.Limit)
 	}
@@ -76,6 +77,7 @@ func (d *DB) ListAIIndexChunks(ctx context.Context, find *store.FindAIIndexChunk
 			&chunk.SourceEnd,
 			&chunk.Vector,
 			&chunk.Dimensions,
+			&chunk.ContentHash,
 			&chunk.IndexedTs,
 		); err != nil {
 			return nil, err

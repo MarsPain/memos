@@ -2,6 +2,7 @@ package v1
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"sync"
 
@@ -69,9 +70,8 @@ type APIV1Service struct {
 	searchRetrieverOnce sync.Once
 	searchRetriever     *search.Retriever
 
-	// aiIndexerOnce and aiIndexer lazily build the manually triggered
-	// embedding indexer (Scaffold B) for the same struct-literal reason as
-	// aiChat.
+	// aiIndexerOnce and aiIndexer lazily build the embedding indexer for the
+	// same struct-literal reason as aiChat.
 	aiIndexerOnce sync.Once
 	aiIndexer     *search.Indexer
 }
@@ -118,6 +118,8 @@ func (s *APIV1Service) memoReadService() *memo.Service {
 // SearchService lazily builds the search-document service that maintains the
 // derived ai_search_document corpus. Memo write handlers emit invalidation
 // signals to it; the server runs its reconciliation loop in the background.
+// The refresh hooks drive the embedding indexer after every refresh, so
+// chunks stay in step with the documents without any manual trigger.
 func (s *APIV1Service) SearchService() *search.Service {
 	s.searchOnce.Do(func() {
 		markdownService := s.MarkdownService
@@ -128,13 +130,26 @@ func (s *APIV1Service) SearchService() *search.Service {
 			)
 		}
 		s.search = search.NewService(s.Store, s.memoReadService(), markdownService)
+		s.search.SetRefreshHooks(search.RefreshHooks{
+			AfterTargetedSync: func(ctx context.Context, memoIDs []int32) {
+				// A cancelled context is a shutdown, not a failure.
+				if err := s.AISearchIndexer().SyncMemos(ctx, memoIDs); err != nil && ctx.Err() == nil {
+					slog.Warn("embedding index sync failed", slog.Any("err", err))
+				}
+			},
+			AfterSweep: func(ctx context.Context) {
+				if err := s.AISearchIndexer().RunOnce(ctx); err != nil && ctx.Err() == nil {
+					slog.Warn("embedding index sweep failed", slog.Any("err", err))
+				}
+			},
+		})
 	})
 	return s.search
 }
 
-// AISearchIndexer lazily builds the manually triggered embedding indexer
-// (Scaffold B; TODO(issue 03): runner-integrated reconciliation replaces the
-// manual trigger). Tests may override AIModelFactory before first use.
+// AISearchIndexer lazily builds the embedding indexer the search-document
+// reconciler drives after each refresh. Tests may override AIModelFactory
+// before first use.
 func (s *APIV1Service) AISearchIndexer() *search.Indexer {
 	s.aiIndexerOnce.Do(func() {
 		s.aiIndexer = search.NewIndexer(s.Store, func() gateway.ModelFactory {

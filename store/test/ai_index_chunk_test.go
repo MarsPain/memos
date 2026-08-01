@@ -22,6 +22,7 @@ func upsertTestingAIIndexChunk(ctx context.Context, t *testing.T, ts *store.Stor
 		SourceEnd:    18,
 		Vector:       []byte{1, 2, 3, 4},
 		Dimensions:   1,
+		ContentHash:  "hash-100",
 	})
 	require.NoError(t, err)
 	return chunk
@@ -44,6 +45,7 @@ func TestAIIndexChunk(t *testing.T) {
 	require.Equal(t, int32(18), chunk.SourceEnd)
 	require.Equal(t, []byte{1, 2, 3, 4}, chunk.Vector)
 	require.Equal(t, int32(1), chunk.Dimensions)
+	require.Equal(t, "hash-100", chunk.ContentHash)
 	require.NotZero(t, chunk.IndexedTs)
 
 	t.Run("get by id and miss returns nil", func(t *testing.T) {

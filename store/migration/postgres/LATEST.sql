@@ -205,6 +205,7 @@ CREATE TABLE ai_index_chunk (
   source_end    INTEGER NOT NULL,
   vector        BYTEA   NOT NULL,
   dimensions    INTEGER NOT NULL,
+  content_hash  TEXT    NOT NULL DEFAULT '',
   indexed_ts    BIGINT  NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()),
   UNIQUE (generation_id, memo_id, memo_revision, chunk_ordinal)
 );

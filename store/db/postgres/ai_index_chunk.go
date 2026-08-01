@@ -11,8 +11,8 @@ import (
 )
 
 func (d *DB) UpsertAIIndexChunk(ctx context.Context, upsert *store.AIIndexChunk) (*store.AIIndexChunk, error) {
-	fields := []string{"generation_id", "memo_id", "memo_revision", "chunk_ordinal", "content_start", "content_end", "source_start", "source_end", "vector", "dimensions"}
-	args := []any{upsert.GenerationID, upsert.MemoID, upsert.MemoRevision, upsert.ChunkOrdinal, upsert.ContentStart, upsert.ContentEnd, upsert.SourceStart, upsert.SourceEnd, upsert.Vector, upsert.Dimensions}
+	fields := []string{"generation_id", "memo_id", "memo_revision", "chunk_ordinal", "content_start", "content_end", "source_start", "source_end", "vector", "dimensions", "content_hash"}
+	args := []any{upsert.GenerationID, upsert.MemoID, upsert.MemoRevision, upsert.ChunkOrdinal, upsert.ContentStart, upsert.ContentEnd, upsert.SourceStart, upsert.SourceEnd, upsert.Vector, upsert.Dimensions, upsert.ContentHash}
 
 	stmt := "INSERT INTO ai_index_chunk (" + strings.Join(fields, ", ") + ") VALUES (" + placeholders(len(args)) + ")" +
 		" ON CONFLICT (generation_id, memo_id, memo_revision, chunk_ordinal) DO UPDATE SET" +
@@ -22,6 +22,7 @@ func (d *DB) UpsertAIIndexChunk(ctx context.Context, upsert *store.AIIndexChunk)
 		" source_end = EXCLUDED.source_end," +
 		" vector = EXCLUDED.vector," +
 		" dimensions = EXCLUDED.dimensions," +
+		" content_hash = EXCLUDED.content_hash," +
 		" indexed_ts = EXTRACT(EPOCH FROM NOW())" +
 		" RETURNING id, indexed_ts"
 	if err := d.db.QueryRowContext(ctx, stmt, args...).Scan(
@@ -50,7 +51,7 @@ func (d *DB) ListAIIndexChunks(ctx context.Context, find *store.FindAIIndexChunk
 		where, args = append(where, "id > "+placeholder(len(args)+1)), append(args, *find.IDGreaterThan)
 	}
 
-	query := "SELECT id, generation_id, memo_id, memo_revision, chunk_ordinal, content_start, content_end, source_start, source_end, vector, dimensions, indexed_ts FROM ai_index_chunk WHERE " + strings.Join(where, " AND ") + " ORDER BY id ASC"
+	query := "SELECT id, generation_id, memo_id, memo_revision, chunk_ordinal, content_start, content_end, source_start, source_end, vector, dimensions, content_hash, indexed_ts FROM ai_index_chunk WHERE " + strings.Join(where, " AND ") + " ORDER BY id ASC"
 	if find.Limit != nil {
 		query = fmt.Sprintf("%s LIMIT %d", query, *find.Limit)
 	}
@@ -75,6 +76,7 @@ func (d *DB) ListAIIndexChunks(ctx context.Context, find *store.FindAIIndexChunk
 			&chunk.SourceEnd,
 			&chunk.Vector,
 			&chunk.Dimensions,
+			&chunk.ContentHash,
 			&chunk.IndexedTs,
 		); err != nil {
 			return nil, err
