@@ -240,12 +240,13 @@ func TestIndexerRejectsInvalidBatchBeforeCommit(t *testing.T) {
 	require.NotEmpty(t, generation.LastError)
 
 	// Semantic retrieval is not callable on the building generation.
-	matches, err := NewSemanticSearcher(fixture.store, embedModelFactory(model)).Search(ctx, "owl")
+	matches, reason, err := NewSemanticSearcher(fixture.store, embedModelFactory(model)).Search(ctx, "owl")
 	require.NoError(t, err)
 	require.Empty(t, matches)
+	require.Equal(t, ReasonSemanticRebuilding, reason)
 }
 
-func TestSemanticSearcherIgnoresForeignFingerprint(t *testing.T) {
+func TestSemanticServesPreviousGenerationAcrossModelChange(t *testing.T) {
 	ctx := context.Background()
 	fixture := newSearchTestFixture(ctx, t)
 
@@ -256,23 +257,18 @@ func TestSemanticSearcherIgnoresForeignFingerprint(t *testing.T) {
 	configureEmbeddingSetting(ctx, t, fixture.store, semanticTestDimensions)
 	require.NoError(t, NewIndexer(fixture.store, embedModelFactory(model)).RunOnce(ctx))
 
-	// The embedding model changed: the stored generation no longer matches
-	// the desired fingerprint, so semantic retrieval is not callable.
-	_, err := fixture.store.UpsertInstanceSetting(ctx, &storepb.InstanceSetting{
-		Key: storepb.InstanceSettingKey_AI,
-		Value: &storepb.InstanceSetting_AiSetting{AiSetting: &storepb.InstanceAISetting{
-			Providers: []*storepb.AIProviderConfig{{
-				Id: "p", Title: "P", Type: storepb.AIProviderType_OPENAI,
-				Endpoint: "https://embed.example.com/v1", ApiKey: "sk-test",
-			}},
-			Embedding: &storepb.EmbeddingConfig{ProviderId: "p", Model: "other-model", Dimensions: semanticTestDimensions},
-		}},
-	})
-	require.NoError(t, err)
+	// The embedding model changed but the replacement has not built yet: the
+	// previous active generation remains callable — its provider type and
+	// endpoint identity are still in the pool — so it keeps serving, embedded
+	// with the model the generation recorded. A building generation under the
+	// new fingerprint never serves.
+	upsertEmbeddingSetting(ctx, t, fixture.store, semanticTestEndpoint, "other-model")
 
-	matches, err := NewSemanticSearcher(fixture.store, embedModelFactory(model)).Search(ctx, "nocturnal predator")
+	matches, reason, err := NewSemanticSearcher(fixture.store, embedModelFactory(model)).Search(ctx, "nocturnal predator")
 	require.NoError(t, err)
-	require.Empty(t, matches)
+	require.Empty(t, reason)
+	require.NotEmpty(t, matches)
+	require.Equal(t, "embed-model", model.EmbeddingRequests[len(model.EmbeddingRequests)-1].Model)
 }
 
 // longOwlMemoContent builds a memo that projects to a multi-chunk document:

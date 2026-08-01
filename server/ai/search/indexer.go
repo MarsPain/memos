@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -12,19 +13,18 @@ import (
 	"github.com/usememos/memos/store"
 )
 
-// Generation lifecycle states. Scaffold C treats the single generation as
-// active once its one-shot pass completes; there is no BUILDING/ACTIVE
-// cutover, retirement, or grace period yet.
-// TODO(issue 04): replace Scaffold C with the full generation lifecycle and
-// atomic cutover.
+// Generation lifecycle states, shared with the store schema. At most one
+// generation is ACTIVE; a BUILDING generation never serves queries; a RETIRED
+// generation is removed after a bounded grace period.
 const (
 	// generationStateBuilding marks a generation whose indexing pass has not
 	// completed. A building generation never serves queries.
-	generationStateBuilding = "BUILDING"
+	generationStateBuilding = store.AIIndexGenerationBuilding
 	// generationStateActive marks the generation semantic queries scan.
-	generationStateActive = "ACTIVE"
-	// The RETIRED state is reserved for the cutover lifecycle (issue 04);
-	// Scaffold C never sets it.
+	generationStateActive = store.AIIndexGenerationActive
+	// generationStateRetired marks a generation replaced by a newer active
+	// one, kept for a bounded grace period before removal.
+	generationStateRetired = store.AIIndexGenerationRetired
 )
 
 const (
@@ -33,6 +33,11 @@ const (
 	indexScanBatchSize = 100
 	// indexEmbedBatchSize bounds every embedding call of a pass.
 	indexEmbedBatchSize = 16
+	// retiredGenerationGracePeriod bounds how long a retired generation is
+	// kept before removal: in-flight scans finish on the new active
+	// generation, and a configuration revert inside the window can resume
+	// the retired generation instead of rebuilding it.
+	retiredGenerationGracePeriod = 10 * time.Minute
 )
 
 // Indexer keeps the embedding index generations in step with the search
@@ -73,12 +78,23 @@ func (ix *Indexer) factory() gateway.ModelFactory {
 // revision is re-chunked and re-embedded in bounded batches. The sweep uses
 // stable keyset pagination and honors cancellation between batches; documents
 // whose embedding keeps failing back off individually while the rest of the
-// corpus keeps progressing. When the sweep covered every eligible document,
-// the generation is treated as active (Scaffold C). With no embedding
-// assignment it does nothing.
+// corpus keeps progressing.
+//
+// The sweep drives the generation lifecycle. Expired retired generations are
+// removed first, with or without an embedding assignment. With embeddings
+// disabled no building work runs: builders stay inert, never served and
+// never embedded. A newer desired fingerprint supersedes and removes older
+// building generations. When the sweep confirms every eligible document has
+// current chunks, the building generation promotes atomically — but only
+// while it still matches the desired embedding assignment. With no embedding
+// assignment it does no indexing work.
 func (ix *Indexer) RunOnce(ctx context.Context) error {
 	ix.mu.Lock()
 	defer ix.mu.Unlock()
+
+	// Housekeeping first: retired generations past the grace period are
+	// removed with their chunks, independent of the embedding configuration.
+	ix.removeExpiredRetiredGenerations(ctx)
 
 	setting, err := ix.store.GetInstanceAISetting(ctx)
 	if err != nil {
@@ -86,8 +102,18 @@ func (ix *Indexer) RunOnce(ctx context.Context) error {
 	}
 	assignment := resolveEmbeddingAssignment(setting)
 	if assignment == nil {
-		// No embedding capability configured: no semantic path executes.
+		// Embeddings disabled: building work is cancelled. Building
+		// generations stay inert — never served, never embedded — until
+		// embeddings are configured again, when a matching fingerprint resumes
+		// them and a newer one supersedes and removes them.
 		return nil
+	}
+	desired := assignment.indexFingerprint()
+
+	// A newer desired fingerprint supersedes and removes any older building
+	// generation; the retired and active ones keep their lifecycle.
+	if err := ix.removeSupersededBuilders(ctx, desired); err != nil {
+		return err
 	}
 
 	generation, err := ix.desiredGeneration(ctx, assignment)
@@ -131,14 +157,130 @@ func (ix *Indexer) RunOnce(ctx context.Context) error {
 
 	generation.MemoTotal = int32(total)
 	generation.MemoIndexed = int32(indexed)
-	if indexed == total {
-		// The sweep covered every eligible document, so the generation may
-		// serve queries. A sweep with rejected batches stays building: a
-		// partial index never serves queries.
-		generation.State = generationStateActive
+	complete := indexed == total
+	if complete {
+		// The verification pass confirmed every eligible document observed in
+		// the pass has current chunks: earlier build failures are resolved.
+		generation.LastError = ""
+	}
+	if generation.State != generationStateBuilding || !complete {
+		// An active generation stays active through partial sweeps — it keeps
+		// serving while the stale documents catch up; a building generation
+		// with rejected batches keeps building: a partial index never serves
+		// queries.
+		if _, err := ix.store.UpsertAIIndexGeneration(ctx, generation); err != nil {
+			return errors.Wrap(err, "failed to update index generation")
+		}
+		return nil
+	}
+	return ix.promote(ctx, generation, desired)
+}
+
+// promote atomically cuts a verified building generation over to active. The
+// promotion is conditional on the generation still matching the desired
+// embedding assignment, checked against the current setting rather than the
+// one the sweep started with: a desired fingerprint that moved on mid-build
+// supersedes and removes this stale builder, and embeddings disabled
+// mid-build leave it inert.
+func (ix *Indexer) promote(ctx context.Context, generation *store.AIIndexGeneration, desired string) error {
+	current, err := ix.desiredFingerprint(ctx)
+	if err != nil {
+		return err
+	}
+	if current != desired {
+		if current == "" {
+			// Embeddings were disabled mid-build: the builder stays inert,
+			// but the completed pass's progress is still recorded.
+			if _, err := ix.store.UpsertAIIndexGeneration(ctx, generation); err != nil {
+				return errors.Wrap(err, "failed to update index generation")
+			}
+			return nil
+		}
+		// A newer desired fingerprint supersedes and removes this stale
+		// builder; its replacement is built by a later pass.
+		return ix.removeGeneration(ctx, generation.ID)
 	}
 	if _, err := ix.store.UpsertAIIndexGeneration(ctx, generation); err != nil {
 		return errors.Wrap(err, "failed to update index generation")
+	}
+	promoted, err := ix.store.PromoteAIIndexGeneration(ctx, &store.AIIndexGenerationPromotion{
+		ID:          generation.ID,
+		Fingerprint: desired,
+		RetiredTs:   time.Now().Unix(),
+	})
+	if err != nil {
+		return errors.Wrap(err, "failed to promote index generation")
+	}
+	if promoted {
+		slog.Info("embedding index generation promoted",
+			slog.Int64("generation_id", int64(generation.ID)),
+			slog.Int("memo_indexed", int(generation.MemoIndexed)))
+	}
+	return nil
+}
+
+// desiredFingerprint returns the desired generation fingerprint under the
+// current instance setting, or "" when no embedding capability is assigned.
+func (ix *Indexer) desiredFingerprint(ctx context.Context) (string, error) {
+	setting, err := ix.store.GetInstanceAISetting(ctx)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to get AI setting")
+	}
+	assignment := resolveEmbeddingAssignment(setting)
+	if assignment == nil {
+		return "", nil
+	}
+	return assignment.indexFingerprint(), nil
+}
+
+// removeSupersededBuilders removes every building generation whose
+// fingerprint is not the desired one, chunks included: a superseded builder
+// can never promote, so keeping it would only leak derived rows.
+func (ix *Indexer) removeSupersededBuilders(ctx context.Context, desired string) error {
+	buildingState := generationStateBuilding
+	builders, err := ix.store.ListAIIndexGenerations(ctx, &store.FindAIIndexGeneration{State: &buildingState})
+	if err != nil {
+		return errors.Wrap(err, "failed to list building generations")
+	}
+	for _, builder := range builders {
+		if builder.Fingerprint == desired {
+			continue
+		}
+		if err := ix.removeGeneration(ctx, builder.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// removeExpiredRetiredGenerations removes retired generations whose grace
+// period elapsed, chunks included. Cleanup failures are logged and left to
+// the next pass rather than failing the sweep.
+func (ix *Indexer) removeExpiredRetiredGenerations(ctx context.Context) {
+	retiredState := generationStateRetired
+	retired, err := ix.store.ListAIIndexGenerations(ctx, &store.FindAIIndexGeneration{State: &retiredState})
+	if err != nil {
+		slog.Warn("failed to list retired generations", slog.Any("err", err))
+		return
+	}
+	cutoff := time.Now().Add(-retiredGenerationGracePeriod).Unix()
+	for _, generation := range retired {
+		if generation.RetiredTs == 0 || generation.RetiredTs > cutoff {
+			continue
+		}
+		if err := ix.removeGeneration(ctx, generation.ID); err != nil {
+			slog.Warn("failed to remove expired retired generation", slog.Int64("generation_id", int64(generation.ID)), slog.Any("err", err))
+		}
+	}
+}
+
+// removeGeneration deletes a generation and every chunk derived into it.
+func (ix *Indexer) removeGeneration(ctx context.Context, generationID int32) error {
+	if err := ix.store.DeleteAIIndexChunk(ctx, &store.DeleteAIIndexChunk{GenerationID: &generationID}); err != nil {
+		return errors.Wrap(err, "failed to delete generation chunks")
+	}
+	if err := ix.store.DeleteAIIndexGeneration(ctx, &store.DeleteAIIndexGeneration{ID: &generationID}); err != nil {
+		return errors.Wrap(err, "failed to delete index generation")
 	}
 	return nil
 }
@@ -207,6 +349,10 @@ func (ix *Indexer) SyncMemos(ctx context.Context, memoIDs []int32) error {
 
 // desiredGeneration returns the generation matching the desired embedding
 // fingerprint, creating it in the building state when it does not exist yet.
+// A retired generation whose fingerprint is desired again — the configuration
+// reverted inside the grace period — resumes building with its still-stored
+// chunks as a head start and must pass the verification pass before serving
+// again.
 func (ix *Indexer) desiredGeneration(ctx context.Context, assignment *embeddingAssignment) (*store.AIIndexGeneration, error) {
 	fingerprint := assignment.indexFingerprint()
 	generation, err := ix.store.GetAIIndexGeneration(ctx, &store.FindAIIndexGeneration{Fingerprint: &fingerprint})
@@ -225,6 +371,14 @@ func (ix *Indexer) desiredGeneration(ctx context.Context, assignment *embeddingA
 		})
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to create index generation")
+		}
+	}
+	if generation.State == generationStateRetired {
+		generation.State = generationStateBuilding
+		generation.RetiredTs = 0
+		generation, err = ix.store.UpsertAIIndexGeneration(ctx, generation)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to resume retired generation")
 		}
 	}
 	return generation, nil

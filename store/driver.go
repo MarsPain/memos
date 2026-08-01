@@ -104,6 +104,7 @@ type Driver interface {
 	// AIIndexGeneration model related methods.
 	UpsertAIIndexGeneration(ctx context.Context, upsert *AIIndexGeneration) (*AIIndexGeneration, error)
 	ListAIIndexGenerations(ctx context.Context, find *FindAIIndexGeneration) ([]*AIIndexGeneration, error)
+	PromoteAIIndexGeneration(ctx context.Context, promote *AIIndexGenerationPromotion) (bool, error)
 	DeleteAIIndexGeneration(ctx context.Context, delete *DeleteAIIndexGeneration) error
 
 	// AIIndexChunk model related methods.

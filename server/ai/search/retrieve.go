@@ -14,9 +14,11 @@ import (
 	"github.com/usememos/memos/store"
 )
 
-// Machine-readable partial/degraded reasons returned when a budget cuts
-// coverage short. Their presence means the searchable corpus was not covered
-// completely; an empty reason list always means complete coverage.
+// Machine-readable partial/degraded reasons returned when coverage falls
+// short of complete — a budget cut the scan short, or semantic retrieval
+// could not serve and lexical answered alone. Their presence means the
+// searchable corpus was not covered completely; an empty reason list always
+// means complete coverage.
 const (
 	// ReasonQueryTruncated marks a normalized query cut down to the query
 	// budgets before matching.
@@ -29,6 +31,13 @@ const (
 	ReasonCandidateBudgetExhausted = "candidate_budget_exhausted"
 	// ReasonTimeBudgetExhausted marks retrieval cut short by the wall clock.
 	ReasonTimeBudgetExhausted = "time_budget_exhausted"
+	// ReasonSemanticRebuilding marks lexical-only coverage because no complete
+	// embedding generation is callable: the semantic index is building (or its
+	// provider left the pool) and lexical retrieval serves the query.
+	ReasonSemanticRebuilding = "semantic_rebuilding"
+	// ReasonSemanticDisabled marks lexical-only coverage because the embedding
+	// capability was disabled after index generations existed.
+	ReasonSemanticDisabled = "semantic_disabled"
 )
 
 // Budgets caps the work one retrieval query may do. The defaults are the
@@ -229,7 +238,13 @@ func (r *Retriever) Search(ctx context.Context, user *store.User, query Query) (
 	// Scaffold D: fuse the semantic candidates with naive interleaving.
 	// TODO(issue 05): replace with ordinal-rank fusion and the semantic scan
 	// budget.
-	candidates = r.fuseSemantic(ctx, parsed.text, tagFilters, candidates, budgets)
+	candidates, semanticReason := r.fuseSemantic(ctx, parsed.text, tagFilters, candidates, budgets)
+	if semanticReason != "" {
+		// Semantic retrieval is configured but cannot serve this query:
+		// lexical coverage answers it, disclosed by the machine-readable
+		// reason.
+		outcome.PartialReasons = appendReason(outcome.PartialReasons, semanticReason)
+	}
 	outcome.Stats.Candidates = len(candidates)
 
 	for _, candidate := range candidates {

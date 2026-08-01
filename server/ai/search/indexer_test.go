@@ -244,13 +244,13 @@ func TestSemanticPathDropsStaleMatchesUntilReindexed(t *testing.T) {
 	// In the interim the semantic path must not serve the stale chunks: the
 	// meaning-based query matches nothing instead of ranking on outdated
 	// vectors.
-	matches, err := NewSemanticSearcher(fixture.store, embedModelFactory(model)).Search(ctx, "nocturnal predator")
+	matches, _, err := NewSemanticSearcher(fixture.store, embedModelFactory(model)).Search(ctx, "nocturnal predator")
 	require.NoError(t, err)
 	require.Empty(t, matches)
 
 	// Once the runner catches up, the fresh chunks serve the query.
 	require.NoError(t, indexer.RunOnce(ctx))
-	matches, err = NewSemanticSearcher(fixture.store, embedModelFactory(model)).Search(ctx, "nocturnal predator")
+	matches, _, err = NewSemanticSearcher(fixture.store, embedModelFactory(model)).Search(ctx, "nocturnal predator")
 	require.NoError(t, err)
 	require.NotEmpty(t, matches)
 	require.Equal(t, m.ID, matches[0].memoID)

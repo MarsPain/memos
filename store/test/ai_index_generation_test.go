@@ -127,3 +127,104 @@ func TestAIIndexGeneration(t *testing.T) {
 		require.NoError(t, ts.DeleteAIIndexGeneration(ctx, &store.DeleteAIIndexGeneration{ID: &missing}))
 	})
 }
+
+func TestAIIndexGenerationRetiredTsRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	ts := NewTestingStore(ctx, t)
+	defer ts.Close()
+
+	generation := upsertTestingAIIndexGeneration(ctx, t, ts, "fp-retired", "RETIRED")
+	require.Zero(t, generation.RetiredTs)
+
+	// The retirement timestamp survives the upsert/list round trip.
+	generation.RetiredTs = 1700000123
+	_, err := ts.UpsertAIIndexGeneration(ctx, generation)
+	require.NoError(t, err)
+	found, err := ts.GetAIIndexGeneration(ctx, &store.FindAIIndexGeneration{ID: &generation.ID})
+	require.NoError(t, err)
+	require.Equal(t, int64(1700000123), found.RetiredTs)
+}
+
+func TestPromoteAIIndexGeneration(t *testing.T) {
+	ctx := context.Background()
+	ts := NewTestingStore(ctx, t)
+	defer ts.Close()
+
+	t.Run("promotes the builder and retires the former active atomically", func(t *testing.T) {
+		serving := upsertTestingAIIndexGeneration(ctx, t, ts, "fp-serving", "ACTIVE")
+		builder := upsertTestingAIIndexGeneration(ctx, t, ts, "fp-builder", "BUILDING")
+
+		promoted, err := ts.PromoteAIIndexGeneration(ctx, &store.AIIndexGenerationPromotion{
+			ID:          builder.ID,
+			Fingerprint: builder.Fingerprint,
+			RetiredTs:   1700000000,
+		})
+		require.NoError(t, err)
+		require.True(t, promoted)
+
+		// Exactly one generation is active: the promoted builder.
+		activeState := "ACTIVE"
+		actives, err := ts.ListAIIndexGenerations(ctx, &store.FindAIIndexGeneration{State: &activeState})
+		require.NoError(t, err)
+		require.Len(t, actives, 1)
+		require.Equal(t, builder.ID, actives[0].ID)
+
+		// The former active retired with the recorded timestamp.
+		retired, err := ts.GetAIIndexGeneration(ctx, &store.FindAIIndexGeneration{ID: &serving.ID})
+		require.NoError(t, err)
+		require.Equal(t, "RETIRED", retired.State)
+		require.Equal(t, int64(1700000000), retired.RetiredTs)
+	})
+
+	t.Run("promotion is conditional on the desired fingerprint", func(t *testing.T) {
+		serving := upsertTestingAIIndexGeneration(ctx, t, ts, "fp-conditional-serving", "ACTIVE")
+		stale := upsertTestingAIIndexGeneration(ctx, t, ts, "fp-stale", "BUILDING")
+
+		// The desired fingerprint moved on mid-build: no promotion, no cutover.
+		promoted, err := ts.PromoteAIIndexGeneration(ctx, &store.AIIndexGenerationPromotion{
+			ID:          stale.ID,
+			Fingerprint: "fp-desired-now",
+			RetiredTs:   1700000000,
+		})
+		require.NoError(t, err)
+		require.False(t, promoted)
+
+		unchanged, err := ts.GetAIIndexGeneration(ctx, &store.FindAIIndexGeneration{ID: &stale.ID})
+		require.NoError(t, err)
+		require.Equal(t, "BUILDING", unchanged.State)
+		stillServing, err := ts.GetAIIndexGeneration(ctx, &store.FindAIIndexGeneration{ID: &serving.ID})
+		require.NoError(t, err)
+		require.Equal(t, "ACTIVE", stillServing.State)
+	})
+
+	t.Run("a generation that is not building does not promote", func(t *testing.T) {
+		retiredRow := upsertTestingAIIndexGeneration(ctx, t, ts, "fp-retired-row", "RETIRED")
+		promoted, err := ts.PromoteAIIndexGeneration(ctx, &store.AIIndexGenerationPromotion{
+			ID:          retiredRow.ID,
+			Fingerprint: retiredRow.Fingerprint,
+			RetiredTs:   1700000000,
+		})
+		require.NoError(t, err)
+		require.False(t, promoted)
+
+		unchanged, err := ts.GetAIIndexGeneration(ctx, &store.FindAIIndexGeneration{ID: &retiredRow.ID})
+		require.NoError(t, err)
+		require.Equal(t, "RETIRED", unchanged.State)
+	})
+
+	t.Run("promotion succeeds with no former active generation", func(t *testing.T) {
+		builder := upsertTestingAIIndexGeneration(ctx, t, ts, "fp-first", "BUILDING")
+		promoted, err := ts.PromoteAIIndexGeneration(ctx, &store.AIIndexGenerationPromotion{
+			ID:          builder.ID,
+			Fingerprint: builder.Fingerprint,
+			RetiredTs:   1700000000,
+		})
+		require.NoError(t, err)
+		require.True(t, promoted)
+
+		found, err := ts.GetAIIndexGeneration(ctx, &store.FindAIIndexGeneration{ID: &builder.ID})
+		require.NoError(t, err)
+		require.Equal(t, "ACTIVE", found.State)
+		require.Zero(t, found.RetiredTs)
+	})
+}

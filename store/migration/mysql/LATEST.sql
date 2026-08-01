@@ -189,6 +189,7 @@ CREATE TABLE `ai_index_generation` (
   `last_error`        VARCHAR(1024) NOT NULL DEFAULT '',
   `created_ts`        BIGINT        NOT NULL DEFAULT (UNIX_TIMESTAMP()),
   `updated_ts`        BIGINT        NOT NULL DEFAULT (UNIX_TIMESTAMP()),
+  `retired_ts`        BIGINT        NOT NULL DEFAULT 0,
   UNIQUE (`fingerprint`)
 );
 

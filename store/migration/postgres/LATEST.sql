@@ -189,6 +189,7 @@ CREATE TABLE ai_index_generation (
   last_error        TEXT    NOT NULL DEFAULT '',
   created_ts        BIGINT  NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()),
   updated_ts        BIGINT  NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW()),
+  retired_ts        BIGINT  NOT NULL DEFAULT 0,
   UNIQUE (fingerprint)
 );
 

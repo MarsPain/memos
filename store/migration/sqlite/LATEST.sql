@@ -188,7 +188,8 @@ CREATE TABLE ai_index_generation (
   memo_indexed      INTEGER NOT NULL DEFAULT 0,
   last_error        TEXT    NOT NULL DEFAULT '',
   created_ts        BIGINT  NOT NULL DEFAULT (strftime('%s', 'now')),
-  updated_ts        BIGINT  NOT NULL DEFAULT (strftime('%s', 'now'))
+  updated_ts        BIGINT  NOT NULL DEFAULT (strftime('%s', 'now')),
+  retired_ts        BIGINT  NOT NULL DEFAULT 0
 );
 
 -- ai_index_chunk

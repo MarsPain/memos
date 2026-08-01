@@ -115,9 +115,21 @@ func convertAIProviderType(providerType storepb.AIProviderType) internalai.Provi
 	}
 }
 
-// SemanticSearcher embeds the query through the configured embedding
-// capability and cosine-compares it against the active generation's chunks
-// in Go over bounded batches.
+// findProviderByIdentity returns the pool provider whose type and sanitized
+// endpoint identity match the generation's, or nil when the generation's
+// provider left the pool. Endpoint identity never carries credentials or
+// secret query values, so matching on it leaks nothing.
+func findProviderByIdentity(providers []internalai.ProviderConfig, providerType, identity string) *internalai.ProviderConfig {
+	for i := range providers {
+		if string(providers[i].Type) == providerType && endpointIdentity(providers[i].Endpoint) == identity {
+			return &providers[i]
+		}
+	}
+	return nil
+}
+
+// SemanticSearcher embeds the query and cosine-compares it against the active
+// generation's chunks in Go over bounded batches.
 type SemanticSearcher struct {
 	store        *store.Store
 	modelFactory func() gateway.ModelFactory
@@ -153,63 +165,80 @@ type semanticMatch struct {
 // Search returns the memos whose chunks are nearest to the query text in the
 // active generation, best first. Matches built from a superseded source
 // revision or content hash are dropped, so stale indexed text never serves.
-// It returns nil when semantic retrieval is not callable: no embedding
-// assignment, no active generation matching the current fingerprint, or a
-// dimension mismatch between the query vector and the generation. An error
-// means the semantic path failed; callers degrade to lexical results.
-func (s *SemanticSearcher) Search(ctx context.Context, queryText string) ([]semanticMatch, error) {
+//
+// The second return value is the machine-readable reason semantic retrieval
+// did not serve, empty when it did: ReasonSemanticDisabled when the embedding
+// capability was removed after generations existed, or
+// ReasonSemanticRebuilding when no complete generation is callable — none
+// promoted yet, or the active generation's provider type and sanitized
+// endpoint identity left the pool. Rebuild isolation: while a replacement
+// builds, the previous complete active generation keeps serving as long as it
+// remains callable, embedded with the model and dimensions it recorded. An
+// error means the semantic path failed; callers degrade to lexical results.
+func (s *SemanticSearcher) Search(ctx context.Context, queryText string) ([]semanticMatch, string, error) {
 	setting, err := s.store.GetInstanceAISetting(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get AI setting")
+		return nil, "", errors.Wrap(err, "failed to get AI setting")
 	}
 	assignment := resolveEmbeddingAssignment(setting)
-	if assignment == nil {
-		return nil, nil
-	}
-
-	fingerprint := assignment.indexFingerprint()
 	activeState := generationStateActive
-	generation, err := s.store.GetAIIndexGeneration(ctx, &store.FindAIIndexGeneration{
-		Fingerprint: &fingerprint,
-		State:       &activeState,
-	})
+	generation, err := s.store.GetAIIndexGeneration(ctx, &store.FindAIIndexGeneration{State: &activeState})
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to find index generation")
+		return nil, "", errors.Wrap(err, "failed to find index generation")
 	}
 	if generation == nil {
-		return nil, nil
+		reason, err := s.unservedReason(ctx, assignment)
+		if err != nil {
+			return nil, "", err
+		}
+		return nil, reason, nil
+	}
+	if assignment == nil {
+		// Embeddings were disabled after generations existed: semantic
+		// retrieval is disabled and lexical serves the query.
+		return nil, ReasonSemanticDisabled, nil
 	}
 
-	model, err := assignment.resolveModel(s.factory())
+	// Callability: the generation is usable only while the current provider
+	// pool still has a provider whose type and sanitized endpoint identity
+	// match it. The query embeds with the model and dimensions the generation
+	// recorded, so a replacement configuration building under a new
+	// fingerprint never makes the serving generation uncallable.
+	provider := findProviderByIdentity(convertAIProviders(setting.GetProviders()), generation.ProviderType, generation.EndpointIdentity)
+	if provider == nil {
+		return nil, ReasonSemanticRebuilding, nil
+	}
+	serving := &embeddingAssignment{provider: *provider, model: generation.Model, dimensions: int(generation.Dimensions)}
+	model, err := serving.resolveModel(s.factory())
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to resolve embedding model")
+		return nil, "", errors.Wrap(err, "failed to resolve embedding model")
 	}
 	response, err := model.Embed(ctx, internalai.EmbeddingRequest{
-		Model:      assignment.model,
+		Model:      serving.model,
 		Inputs:     []string{queryText},
-		Dimensions: assignment.dimensions,
+		Dimensions: serving.dimensions,
 	})
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to embed query")
+		return nil, "", errors.Wrap(err, "failed to embed query")
 	}
 	if len(response.Vectors) != 1 {
-		return nil, errors.Errorf("expected one query vector, got %d", len(response.Vectors))
+		return nil, "", errors.Errorf("expected one query vector, got %d", len(response.Vectors))
 	}
 	queryVector, err := internalai.NormalizeVector(response.Vectors[0])
 	if err != nil {
-		return nil, errors.Wrap(err, "query vector is invalid")
+		return nil, "", errors.Wrap(err, "query vector is invalid")
 	}
 	if generation.Dimensions > 0 && int32(len(queryVector)) != generation.Dimensions {
-		// Dimension isolation: the generation is not callable with the
-		// current embedding configuration.
-		return nil, nil
+		// Dimension isolation: the generation is not callable with the vectors
+		// the provider now produces.
+		return nil, ReasonSemanticRebuilding, nil
 	}
 
 	best := map[int32]*semanticMatch{}
 	var afterID int32
 	for {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		limit := semanticScanBatchSize
 		chunks, err := s.store.ListAIIndexChunks(ctx, &store.FindAIIndexChunk{
@@ -218,7 +247,7 @@ func (s *SemanticSearcher) Search(ctx context.Context, queryText string) ([]sema
 			Limit:         &limit,
 		})
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to scan index chunks")
+			return nil, "", errors.Wrap(err, "failed to scan index chunks")
 		}
 		for _, chunk := range chunks {
 			afterID = chunk.ID
@@ -253,14 +282,33 @@ func (s *SemanticSearcher) Search(ctx context.Context, queryText string) ([]sema
 	for _, match := range matches {
 		document, err := s.store.GetAISearchDocument(ctx, &store.FindAISearchDocument{MemoID: &match.memoID})
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to recheck search document")
+			return nil, "", errors.Wrap(err, "failed to recheck search document")
 		}
 		if document == nil || document.MemoUpdatedTs != match.memoRevision || document.ContentHash != match.contentHash {
 			continue
 		}
 		current = append(current, match)
 	}
-	return current, nil
+	return current, "", nil
+}
+
+// unservedReason reports why semantic retrieval cannot serve when no active
+// generation exists: ReasonSemanticRebuilding when an embedding capability is
+// assigned (a build is due or in progress), ReasonSemanticDisabled when the
+// capability was removed after generations existed, and "" when embeddings
+// were never configured so Stage 2 behavior stays byte-identical.
+func (s *SemanticSearcher) unservedReason(ctx context.Context, assignment *embeddingAssignment) (string, error) {
+	if assignment != nil {
+		return ReasonSemanticRebuilding, nil
+	}
+	generations, err := s.store.ListAIIndexGenerations(ctx, &store.FindAIIndexGeneration{})
+	if err != nil {
+		return "", errors.Wrap(err, "failed to list index generations")
+	}
+	if len(generations) > 0 {
+		return ReasonSemanticDisabled, nil
+	}
+	return "", nil
 }
 
 // dot returns the dot product of two equal-length vectors. Both vectors are
@@ -288,22 +336,24 @@ func sortSemanticMatches(matches []semanticMatch) {
 // fuseSemantic merges the semantic matches into the lexical candidates with
 // naive interleaving: lexical and semantic candidates alternate, a memo in
 // both keeps its lexical position and gains the semantic rank reason, and
-// the merged list stays within the candidate budget.
+// the merged list stays within the candidate budget. The second return value
+// is the machine-readable reason semantic retrieval did not serve — the
+// query is answered by lexical coverage alone — empty when it served.
 // TODO(issue 05): replace Scaffold D with ordinal-rank fusion, per-path rank
 // reasons, and the semantic scan budget.
-func (r *Retriever) fuseSemantic(ctx context.Context, queryText string, tagFilters []string, lexical []candidate, budgets Budgets) []candidate {
+func (r *Retriever) fuseSemantic(ctx context.Context, queryText string, tagFilters []string, lexical []candidate, budgets Budgets) ([]candidate, string) {
 	if r.semantic == nil {
-		return lexical
+		return lexical, ""
 	}
-	matches, err := r.semantic.Search(ctx, queryText)
+	matches, reason, err := r.semantic.Search(ctx, queryText)
 	if err != nil {
 		// Semantic failure never breaks search: lexical results serve the
 		// query unchanged.
 		slog.WarnContext(ctx, "semantic retrieval unavailable", "error", err)
-		return lexical
+		return lexical, ""
 	}
 	if len(matches) == 0 {
-		return lexical
+		return lexical, reason
 	}
 
 	lexicalByMemo := make(map[int32]int, len(lexical))
@@ -344,7 +394,7 @@ func (r *Retriever) fuseSemantic(ctx context.Context, queryText string, tagFilte
 			anchor:   semanticAnchor(document, match.contentPos),
 		})
 	}
-	return mergeInterleaved(lexical, semantic, budgets)
+	return mergeInterleaved(lexical, semantic, budgets), ""
 }
 
 // matchCurrent reports whether a semantic match was built from the document's
