@@ -111,7 +111,7 @@ func TestCutoverKeepsPreviousGenerationServingDuringRebuild(t *testing.T) {
 	// generation, embedded with the model that generation recorded, never by
 	// the building replacement.
 	searcher := NewSemanticSearcher(fixture.store, embedModelFactory(model))
-	matches, reason, err := searcher.Search(ctx, "nocturnal predator")
+	matches, reason, err := searcher.Search(ctx, "nocturnal predator", semanticScanBudgets{})
 	require.NoError(t, err)
 	require.Empty(t, reason)
 	require.NotEmpty(t, matches)
@@ -130,7 +130,7 @@ func TestCutoverKeepsPreviousGenerationServingDuringRebuild(t *testing.T) {
 	require.NotZero(t, retired.RetiredTs)
 
 	// Queries now embed with the new generation's model.
-	matches, reason, err = searcher.Search(ctx, "nocturnal predator")
+	matches, reason, err = searcher.Search(ctx, "nocturnal predator", semanticScanBudgets{})
 	require.NoError(t, err)
 	require.Empty(t, reason)
 	require.NotEmpty(t, matches)
@@ -368,7 +368,7 @@ func TestSemanticNotCallableAfterProviderEndpointChange(t *testing.T) {
 	// reports rebuilding and lexical serves until the replacement promotes.
 	upsertEmbeddingSetting(ctx, t, fixture.store, "https://embed-v2.example.com/v1", "embed-model")
 	searcher := NewSemanticSearcher(fixture.store, embedModelFactory(model))
-	matches, reason, err := searcher.Search(ctx, "nocturnal predator")
+	matches, reason, err := searcher.Search(ctx, "nocturnal predator", semanticScanBudgets{})
 	require.NoError(t, err)
 	require.Empty(t, matches)
 	require.Equal(t, ReasonSemanticRebuilding, reason)
@@ -376,7 +376,7 @@ func TestSemanticNotCallableAfterProviderEndpointChange(t *testing.T) {
 	require.NoError(t, NewIndexer(fixture.store, embedModelFactory(model)).RunOnce(ctx))
 	promoted := requireOnlyActiveGeneration(ctx, t, fixture.store)
 	require.Equal(t, "https://embed-v2.example.com/v1", promoted.EndpointIdentity)
-	matches, reason, err = searcher.Search(ctx, "nocturnal predator")
+	matches, reason, err = searcher.Search(ctx, "nocturnal predator", semanticScanBudgets{})
 	require.NoError(t, err)
 	require.Empty(t, reason)
 	require.NotEmpty(t, matches)

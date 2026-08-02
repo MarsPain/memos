@@ -38,6 +38,17 @@ const (
 	// ReasonSemanticDisabled marks lexical-only coverage because the embedding
 	// capability was disabled after index generations existed.
 	ReasonSemanticDisabled = "semantic_disabled"
+	// ReasonSemanticBudgetExceeded marks lexical-only coverage because the
+	// semantic scan could not finish within its chunk-vector byte budget; the
+	// incomplete semantic candidate set was discarded rather than ranked as
+	// though it represented the corpus.
+	ReasonSemanticBudgetExceeded = "semantic_budget_exceeded"
+	// ReasonEmbeddingFailed marks lexical-only coverage because the query
+	// embedding call failed.
+	ReasonEmbeddingFailed = "embedding_failed"
+	// ReasonEmbeddingTimeout marks lexical-only coverage because the bounded
+	// query embedding call exceeded its own deadline.
+	ReasonEmbeddingTimeout = "embedding_timeout"
 )
 
 // Budgets caps the work one retrieval query may do. The defaults are the
@@ -55,22 +66,31 @@ type Budgets struct {
 	MaxCandidates int
 	// MaxResults caps the final results.
 	MaxResults int
+	// MaxSemanticScanBytes caps the chunk-vector bytes the semantic scan
+	// reads per query.
+	MaxSemanticScanBytes int
+	// EmbeddingTimeout bounds the single query embedding call, counted within
+	// the wall clock.
+	EmbeddingTimeout time.Duration
 	// WallClock is the per-query wall-clock deadline.
 	WallClock time.Duration
 }
 
 // DefaultBudgets returns the spec's provisional retrieval budgets: a
 // 1,024-character normalized query, a 32 MB scan, 200 candidates, 20 final
-// results, and a 5-second wall clock.
+// results, a 128 MB semantic scan of chunk-vector bytes, one query embedding
+// call bounded at 2 seconds, and a 5-second wall clock.
 func DefaultBudgets() Budgets {
 	return Budgets{
-		MaxQueryRunes: 1024,
-		MaxQueryWords: 32,
-		MaxScanBytes:  32 << 20,
-		ScanBatchSize: 100,
-		MaxCandidates: 200,
-		MaxResults:    20,
-		WallClock:     5 * time.Second,
+		MaxQueryRunes:        1024,
+		MaxQueryWords:        32,
+		MaxScanBytes:         32 << 20,
+		ScanBatchSize:        100,
+		MaxCandidates:        200,
+		MaxResults:           20,
+		MaxSemanticScanBytes: 128 << 20,
+		EmbeddingTimeout:     2 * time.Second,
+		WallClock:            5 * time.Second,
 	}
 }
 
@@ -94,6 +114,12 @@ func (b Budgets) normalize() Budgets {
 	}
 	if b.MaxResults <= 0 {
 		b.MaxResults = defaults.MaxResults
+	}
+	if b.MaxSemanticScanBytes <= 0 {
+		b.MaxSemanticScanBytes = defaults.MaxSemanticScanBytes
+	}
+	if b.EmbeddingTimeout <= 0 {
+		b.EmbeddingTimeout = defaults.EmbeddingTimeout
 	}
 	if b.WallClock <= 0 {
 		b.WallClock = defaults.WallClock
@@ -235,14 +261,14 @@ func (r *Retriever) Search(ctx context.Context, user *store.User, query Query) (
 	outcome.PartialReasons = append(outcome.PartialReasons, scanReasons...)
 	outcome.Stats = stats
 
-	// Scaffold D: fuse the semantic candidates with naive interleaving.
-	// TODO(issue 05): replace with ordinal-rank fusion and the semantic scan
-	// budget.
-	candidates, semanticReason := r.fuseSemantic(ctx, parsed.text, tagFilters, candidates, budgets)
+	// Fuse the semantic candidates with the lexical ones by ordinal rank.
+	// When semantic retrieval cannot serve this query, lexical coverage
+	// answers it, disclosed by the machine-readable reason.
+	candidates, semanticReason, err := r.fuseSemantic(ctx, parsed.text, tagFilters, candidates, budgets)
+	if err != nil {
+		return nil, err
+	}
 	if semanticReason != "" {
-		// Semantic retrieval is configured but cannot serve this query:
-		// lexical coverage answers it, disclosed by the machine-readable
-		// reason.
 		outcome.PartialReasons = appendReason(outcome.PartialReasons, semanticReason)
 	}
 	outcome.Stats.Candidates = len(candidates)
@@ -273,6 +299,16 @@ func (r *Retriever) Search(ctx context.Context, user *store.User, query Query) (
 // query's own wall clock — rather than a caller cancellation.
 func timeBudgetExpired(ctx context.Context) bool {
 	return errors.Is(ctx.Err(), context.DeadlineExceeded)
+}
+
+// ctxFailure classifies an expired context for the semantic path: the query's
+// own wall clock firing is the time-budget degraded reason, while a caller
+// cancellation propagates as the context error.
+func ctxFailure(ctx context.Context) (string, error) {
+	if timeBudgetExpired(ctx) {
+		return ReasonTimeBudgetExhausted, nil
+	}
+	return "", status.FromContextError(ctx.Err()).Err()
 }
 
 // appendReason appends a reason once, preserving first-occurrence order.

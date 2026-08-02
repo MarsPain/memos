@@ -145,6 +145,10 @@ func NewServiceWithLimits(st *store.Store, memoService *memo.Service, modelFacto
 		inflight:     semaphore.NewWeighted(int64(limits.MaxConcurrentAttempts)),
 		active:       newActiveAttempts(),
 	}
+	// Chat's retrieval phase consumes the same fused lexical+semantic path as
+	// search, so citations and provider context inherit the hybrid ranking,
+	// budget, and degradation guarantees.
+	service.retriever.SetSemanticSearcher(search.NewSemanticSearcher(st, modelFactory))
 	service.reconcileInterruptedAttempts(context.Background())
 	return service
 }

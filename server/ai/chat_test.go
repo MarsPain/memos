@@ -957,3 +957,101 @@ func TestSendMessageCarriesRetrievalReasons(t *testing.T) {
 	require.Len(t, messages, 2)
 	require.Contains(t, messages[1].RetrievalReasons, "query_truncated")
 }
+
+// chatSemanticTestDimensions is the embedding size the semantic chat tests use.
+const chatSemanticTestDimensions = 2
+
+// configureEmbedding adds the embedding capability to the fixture's provider
+// pool alongside the generation assignment.
+func (f *chatTestFixture) configureEmbedding(ctx context.Context, t *testing.T) {
+	t.Helper()
+	_, err := f.store.UpsertInstanceSetting(ctx, &storepb.InstanceSetting{
+		Key: storepb.InstanceSettingKey_AI,
+		Value: &storepb.InstanceSetting_AiSetting{AiSetting: &storepb.InstanceAISetting{
+			Providers: []*storepb.AIProviderConfig{{
+				Id: "p", Title: "P", Type: storepb.AIProviderType_OPENAI,
+				Endpoint: "https://api.example.com/v1", ApiKey: "sk-test",
+			}},
+			Generation: &storepb.GenerationConfig{ProviderId: "p", Model: "chat-model"},
+			Embedding:  &storepb.EmbeddingConfig{ProviderId: "p", Model: "embed-model", Dimensions: chatSemanticTestDimensions},
+		}},
+	})
+	require.NoError(t, err)
+}
+
+// chatSemanticEmbedFunc deterministically embeds texts mentioning the owl
+// vocabulary in one direction and everything else in the orthogonal one, so a
+// question sharing no token with a memo still matches it semantically.
+func chatSemanticEmbedFunc(request internalai.EmbeddingRequest) (internalai.EmbeddingResponse, error) {
+	vectors := make([][]float32, 0, len(request.Inputs))
+	for _, input := range request.Inputs {
+		vector := []float32{0, 1}
+		for _, word := range strings.Fields(strings.ToLower(input)) {
+			switch strings.Trim(word, ".,!?") {
+			case "owl", "owls", "hunts", "nocturnal", "predator":
+				vector = []float32{1, 0}
+			}
+		}
+		vectors = append(vectors, vector)
+	}
+	return internalai.EmbeddingResponse{Vectors: vectors, Dimensions: chatSemanticTestDimensions}, nil
+}
+
+// indexSemanticChunks builds the search documents and indexes their chunks so
+// the semantic path can serve the fixture's memos.
+func (f *chatTestFixture) indexSemanticChunks(ctx context.Context, t *testing.T) {
+	t.Helper()
+	f.syncSearch(ctx)
+	require.NoError(t, search.NewIndexer(f.store, f.factory).RunOnce(ctx))
+}
+
+func TestSendMessageCitesSemanticOnlyMatch(t *testing.T) {
+	ctx := context.Background()
+	fixture := newChatTestFixture(ctx, t, &aitest.Model{
+		StreamEvents: []internalai.StreamEvent{{Delta: "answer"}},
+		EmbedFunc:    chatSemanticEmbedFunc,
+	}, nil)
+	fixture.configureEmbedding(ctx, t)
+	alice := fixture.createUser(ctx, t, "alice")
+	owl := fixture.createMemo(ctx, t, alice.ID, "alice-owl", "The owl hunts field mice at dusk.", store.Private)
+	fixture.createMemo(ctx, t, alice.ID, "alice-cooking", "Risotto recipe notes.", store.Private)
+	fixture.indexSemanticChunks(ctx, t)
+	conversation := fixture.createConversation(ctx, t, alice, "")
+
+	// The question shares no token with the memo: only the fused semantic
+	// path can produce it, and the citation keeps the reauthorized,
+	// revision-checked guarantee.
+	collector, err := fixture.send(ctx, alice, conversation.UID, "nocturnal predator", "req-1")
+	require.NoError(t, err)
+	complete := requireCompleteEvent(t, collector)
+	require.Len(t, complete.Citations, 1)
+	require.Equal(t, owl.UID, complete.Citations[0].MemoUID)
+	require.NotEmpty(t, complete.Citations[0].Snippet)
+	require.Empty(t, complete.RetrievalReasons)
+	require.Contains(t, fixture.model.StreamRequests[0].Messages[1].Content, "<memo name=\"memos/"+owl.UID+"\">")
+}
+
+func TestSendMessageDegradesToLexicalOnEmbeddingFailure(t *testing.T) {
+	ctx := context.Background()
+	model := &aitest.Model{
+		StreamEvents: []internalai.StreamEvent{{Delta: "answer"}},
+		EmbedFunc:    chatSemanticEmbedFunc,
+	}
+	fixture := newChatTestFixture(ctx, t, model, nil)
+	fixture.configureEmbedding(ctx, t)
+	alice := fixture.createUser(ctx, t, "alice")
+	owl := fixture.createMemo(ctx, t, alice.ID, "alice-owl", "The owl hunts field mice at dusk.", store.Private)
+	fixture.indexSemanticChunks(ctx, t)
+	conversation := fixture.createConversation(ctx, t, alice, "")
+
+	// The embedding provider goes down after indexing: the answer still
+	// completes, grounded on the lexical match, and the attempt discloses
+	// the degraded retrieval.
+	model.EmbeddingError = errors.New("provider is down")
+	collector, err := fixture.send(ctx, alice, conversation.UID, "owl", "req-1")
+	require.NoError(t, err)
+	complete := requireCompleteEvent(t, collector)
+	require.Len(t, complete.Citations, 1)
+	require.Equal(t, owl.UID, complete.Citations[0].MemoUID)
+	require.Contains(t, complete.RetrievalReasons, "embedding_failed")
+}

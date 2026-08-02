@@ -5,6 +5,7 @@ import (
 	"context"
 	"log/slog"
 	"slices"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -150,21 +151,53 @@ func (s *SemanticSearcher) factory() gateway.ModelFactory {
 	return s.modelFactory()
 }
 
+// semanticScanBudgets bounds one semantic query: the chunk-vector bytes the
+// scan may read and the deadline of the single query embedding call, counted
+// within the query's wall clock. Zero fields fall back to the defaults.
+type semanticScanBudgets struct {
+	maxScanBytes int
+	embedTimeout time.Duration
+}
+
+// normalize fills zero or negative fields with the defaults.
+func (b semanticScanBudgets) normalize() semanticScanBudgets {
+	defaults := DefaultBudgets()
+	if b.maxScanBytes <= 0 {
+		b.maxScanBytes = defaults.MaxSemanticScanBytes
+	}
+	if b.embedTimeout <= 0 {
+		b.embedTimeout = defaults.EmbeddingTimeout
+	}
+	return b
+}
+
 // semanticMatch is one memo ranked by the semantic scan: its best chunk's
-// cosine similarity, the chunk's start within the projected content, and the
-// source revision and content hash the chunk was built from, so callers can
-// drop matches built from a superseded document.
+// cosine similarity, the chunk's start within the projected content, the
+// source revision and content hash the chunk was built from, and the search
+// document the match was validated against, so the fusion can build a
+// candidate without rereading it.
 type semanticMatch struct {
 	memoID       int32
 	score        float64
 	contentPos   int32
 	memoRevision int64
 	contentHash  string
+	document     *store.AISearchDocument
 }
 
 // Search returns the memos whose chunks are nearest to the query text in the
 // active generation, best first. Matches built from a superseded source
 // revision or content hash are dropped, so stale indexed text never serves.
+// Only chunks sharing a direction with the query (a positive cosine
+// similarity) rank: a zero or negative similarity is no evidence the
+// semantic path produced the memo.
+//
+// The scan is a complete pass over the active generation in bounded batches,
+// capped by the scan budget's chunk-vector bytes. If the scan cannot finish
+// inside its budget, the incomplete semantic candidate set is discarded
+// outright — never ranked as though an arbitrary prefix of vector rows
+// represented the corpus. The single query embedding call is bounded by its
+// own deadline, counted within the query's wall clock.
 //
 // The second return value is the machine-readable reason semantic retrieval
 // did not serve, empty when it did: ReasonSemanticDisabled when the embedding
@@ -174,8 +207,10 @@ type semanticMatch struct {
 // endpoint identity left the pool. Rebuild isolation: while a replacement
 // builds, the previous complete active generation keeps serving as long as it
 // remains callable, embedded with the model and dimensions it recorded. An
-// error means the semantic path failed; callers degrade to lexical results.
-func (s *SemanticSearcher) Search(ctx context.Context, queryText string) ([]semanticMatch, string, error) {
+// error means the store failed or the caller went away; the query fails
+// rather than degrading.
+func (s *SemanticSearcher) Search(ctx context.Context, queryText string, scanBudgets semanticScanBudgets) ([]semanticMatch, string, error) {
+	scanBudgets = scanBudgets.normalize()
 	setting, err := s.store.GetInstanceAISetting(ctx)
 	if err != nil {
 		return nil, "", errors.Wrap(err, "failed to get AI setting")
@@ -211,22 +246,39 @@ func (s *SemanticSearcher) Search(ctx context.Context, queryText string) ([]sema
 	serving := &embeddingAssignment{provider: *provider, model: generation.Model, dimensions: int(generation.Dimensions)}
 	model, err := serving.resolveModel(s.factory())
 	if err != nil {
-		return nil, "", errors.Wrap(err, "failed to resolve embedding model")
+		// The serving generation's provider configuration no longer resolves:
+		// lexical serves the query with the failure disclosed.
+		slog.WarnContext(ctx, "failed to resolve embedding model", "error", err)
+		return nil, ReasonEmbeddingFailed, nil
 	}
-	response, err := model.Embed(ctx, internalai.EmbeddingRequest{
+
+	// The one query embedding call is bounded by its own deadline and counted
+	// within the query's wall clock. Its failure or timeout never breaks
+	// search: lexical results serve with the reason disclosed.
+	embedCtx, cancel := context.WithTimeout(ctx, scanBudgets.embedTimeout)
+	response, err := model.Embed(embedCtx, internalai.EmbeddingRequest{
 		Model:      serving.model,
 		Inputs:     []string{queryText},
 		Dimensions: serving.dimensions,
 	})
+	cancel()
 	if err != nil {
-		return nil, "", errors.Wrap(err, "failed to embed query")
+		if ctx.Err() != nil {
+			reason, ctxErr := ctxFailure(ctx)
+			return nil, reason, ctxErr
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			// The embedding call's own deadline fired.
+			return nil, ReasonEmbeddingTimeout, nil
+		}
+		return nil, ReasonEmbeddingFailed, nil
 	}
 	if len(response.Vectors) != 1 {
-		return nil, "", errors.Errorf("expected one query vector, got %d", len(response.Vectors))
+		return nil, ReasonEmbeddingFailed, nil
 	}
 	queryVector, err := internalai.NormalizeVector(response.Vectors[0])
 	if err != nil {
-		return nil, "", errors.Wrap(err, "query vector is invalid")
+		return nil, ReasonEmbeddingFailed, nil
 	}
 	if generation.Dimensions > 0 && int32(len(queryVector)) != generation.Dimensions {
 		// Dimension isolation: the generation is not callable with the vectors
@@ -235,10 +287,12 @@ func (s *SemanticSearcher) Search(ctx context.Context, queryText string) ([]sema
 	}
 
 	best := map[int32]*semanticMatch{}
+	scannedBytes := 0
 	var afterID int32
 	for {
 		if err := ctx.Err(); err != nil {
-			return nil, "", err
+			reason, ctxErr := ctxFailure(ctx)
+			return nil, reason, ctxErr
 		}
 		limit := semanticScanBatchSize
 		chunks, err := s.store.ListAIIndexChunks(ctx, &store.FindAIIndexChunk{
@@ -247,15 +301,31 @@ func (s *SemanticSearcher) Search(ctx context.Context, queryText string) ([]sema
 			Limit:         &limit,
 		})
 		if err != nil {
+			if ctx.Err() != nil {
+				reason, ctxErr := ctxFailure(ctx)
+				return nil, reason, ctxErr
+			}
 			return nil, "", errors.Wrap(err, "failed to scan index chunks")
 		}
 		for _, chunk := range chunks {
 			afterID = chunk.ID
+			scannedBytes += len(chunk.Vector)
+			if scannedBytes > scanBudgets.maxScanBytes {
+				// The scan cannot finish inside its budget: discard the
+				// incomplete semantic candidate set instead of ranking an
+				// arbitrary prefix of vector rows.
+				return nil, ReasonSemanticBudgetExceeded, nil
+			}
 			vector, err := internalai.DecodeVector(chunk.Vector, int(chunk.Dimensions))
 			if err != nil || len(vector) != len(queryVector) {
 				continue
 			}
 			score := dot(queryVector, vector)
+			if score <= 0 {
+				// Orthogonal or opposed vectors share no direction with the
+				// query: not evidence the semantic path produced the memo.
+				continue
+			}
 			current, ok := best[chunk.MemoID]
 			if !ok || score > current.score {
 				best[chunk.MemoID] = &semanticMatch{memoID: chunk.MemoID, score: score, contentPos: chunk.ContentStart, memoRevision: chunk.MemoRevision, contentHash: chunk.ContentHash}
@@ -277,16 +347,23 @@ func (s *SemanticSearcher) Search(ctx context.Context, queryText string) ([]sema
 
 	// Staleness guard: a chunk built from a superseded source revision or
 	// content hash never serves — the memo returns once the indexer catches
-	// up. The citation reread remains the last line of defense.
+	// up. The citation reread remains the last line of defense. Surviving
+	// matches carry the document they were validated against, so the fusion
+	// builds candidates without rereading them.
 	current := make([]semanticMatch, 0, len(matches))
 	for _, match := range matches {
 		document, err := s.store.GetAISearchDocument(ctx, &store.FindAISearchDocument{MemoID: &match.memoID})
 		if err != nil {
+			if ctx.Err() != nil {
+				reason, ctxErr := ctxFailure(ctx)
+				return nil, reason, ctxErr
+			}
 			return nil, "", errors.Wrap(err, "failed to recheck search document")
 		}
 		if document == nil || document.MemoUpdatedTs != match.memoRevision || document.ContentHash != match.contentHash {
 			continue
 		}
+		match.document = document
 		current = append(current, match)
 	}
 	return current, "", nil
@@ -331,112 +408,4 @@ func sortSemanticMatches(matches []semanticMatch) {
 		}
 		return cmp.Compare(a.memoID, b.memoID)
 	})
-}
-
-// fuseSemantic merges the semantic matches into the lexical candidates with
-// naive interleaving: lexical and semantic candidates alternate, a memo in
-// both keeps its lexical position and gains the semantic rank reason, and
-// the merged list stays within the candidate budget. The second return value
-// is the machine-readable reason semantic retrieval did not serve — the
-// query is answered by lexical coverage alone — empty when it served.
-// TODO(issue 05): replace Scaffold D with ordinal-rank fusion, per-path rank
-// reasons, and the semantic scan budget.
-func (r *Retriever) fuseSemantic(ctx context.Context, queryText string, tagFilters []string, lexical []candidate, budgets Budgets) ([]candidate, string) {
-	if r.semantic == nil {
-		return lexical, ""
-	}
-	matches, reason, err := r.semantic.Search(ctx, queryText)
-	if err != nil {
-		// Semantic failure never breaks search: lexical results serve the
-		// query unchanged.
-		slog.WarnContext(ctx, "semantic retrieval unavailable", "error", err)
-		return lexical, ""
-	}
-	if len(matches) == 0 {
-		return lexical, reason
-	}
-
-	lexicalByMemo := make(map[int32]int, len(lexical))
-	for i, c := range lexical {
-		lexicalByMemo[c.document.MemoID] = i
-	}
-
-	semantic := []candidate{}
-	for _, match := range matches {
-		if index, ok := lexicalByMemo[match.memoID]; ok {
-			// A match built from a superseded document adds nothing: the memo
-			// keeps its lexical hit but not the semantic corroboration.
-			if matchCurrent(lexical[index].document, match) {
-				lexical[index].reasons = appendReason(lexical[index].reasons, RankReasonSemantic)
-			}
-			continue
-		}
-		document, err := r.store.GetAISearchDocument(ctx, &store.FindAISearchDocument{MemoID: &match.memoID})
-		if err != nil || document == nil {
-			continue
-		}
-		if !matchCurrent(document, match) {
-			// The winning chunk was built from a superseded revision or hash:
-			// stale indexed text never serves; the memo returns once the
-			// indexer catches up.
-			continue
-		}
-		if document.ProjectionVersion != ProjectionVersion || document.NormalizationVersion != NormalizationVersion {
-			continue
-		}
-		if !tagsMatch(document.Tags, tagFilters) {
-			continue
-		}
-		semantic = append(semantic, candidate{
-			document: document,
-			score:    match.score,
-			reasons:  []string{RankReasonSemantic},
-			anchor:   semanticAnchor(document, match.contentPos),
-		})
-	}
-	return mergeInterleaved(lexical, semantic, budgets), ""
-}
-
-// matchCurrent reports whether a semantic match was built from the document's
-// current source revision and content hash.
-func matchCurrent(document *store.AISearchDocument, match semanticMatch) bool {
-	return document.MemoUpdatedTs == match.memoRevision && document.ContentHash == match.contentHash
-}
-
-// mergeInterleaved merges lexical and semantic candidates with naive
-// interleaving: the two lists alternate and the merged list stays within the
-// candidate budget.
-// TODO(issue 05): replaced together with the fusion caller by ordinal-rank
-// fusion.
-func mergeInterleaved(lexical, semantic []candidate, budgets Budgets) []candidate {
-	merged := make([]candidate, 0, min(len(lexical)+len(semantic), budgets.MaxCandidates))
-	lexicalIndex, semanticIndex := 0, 0
-	for len(merged) < budgets.MaxCandidates && (lexicalIndex < len(lexical) || semanticIndex < len(semantic)) {
-		if lexicalIndex < len(lexical) {
-			merged = append(merged, lexical[lexicalIndex])
-			lexicalIndex++
-			if len(merged) >= budgets.MaxCandidates {
-				break
-			}
-		}
-		if semanticIndex < len(semantic) {
-			merged = append(merged, semantic[semanticIndex])
-			semanticIndex++
-		}
-	}
-	return merged
-}
-
-// semanticAnchor returns the first content token at or after the chunk's
-// start within the projected content, used to place the snippet near the
-// matching chunk.
-func semanticAnchor(document *store.AISearchDocument, contentPos int32) string {
-	if contentPos < 0 || int(contentPos) >= len(document.Content) {
-		return ""
-	}
-	words := tokenize(document.Content[contentPos:])
-	if len(words) == 0 {
-		return ""
-	}
-	return words[0]
 }

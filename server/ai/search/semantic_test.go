@@ -240,7 +240,7 @@ func TestIndexerRejectsInvalidBatchBeforeCommit(t *testing.T) {
 	require.NotEmpty(t, generation.LastError)
 
 	// Semantic retrieval is not callable on the building generation.
-	matches, reason, err := NewSemanticSearcher(fixture.store, embedModelFactory(model)).Search(ctx, "owl")
+	matches, reason, err := NewSemanticSearcher(fixture.store, embedModelFactory(model)).Search(ctx, "owl", semanticScanBudgets{})
 	require.NoError(t, err)
 	require.Empty(t, matches)
 	require.Equal(t, ReasonSemanticRebuilding, reason)
@@ -264,7 +264,7 @@ func TestSemanticServesPreviousGenerationAcrossModelChange(t *testing.T) {
 	// new fingerprint never serves.
 	upsertEmbeddingSetting(ctx, t, fixture.store, semanticTestEndpoint, "other-model")
 
-	matches, reason, err := NewSemanticSearcher(fixture.store, embedModelFactory(model)).Search(ctx, "nocturnal predator")
+	matches, reason, err := NewSemanticSearcher(fixture.store, embedModelFactory(model)).Search(ctx, "nocturnal predator", semanticScanBudgets{})
 	require.NoError(t, err)
 	require.Empty(t, reason)
 	require.NotEmpty(t, matches)

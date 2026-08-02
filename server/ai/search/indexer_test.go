@@ -236,7 +236,7 @@ func TestSemanticPathDropsStaleMatchesUntilReindexed(t *testing.T) {
 
 	// The memo is edited and its document refreshed, but the indexer has not
 	// caught up: the stored chunks are built from the superseded revision.
-	updated := "# Kitchen\n\nSimmer the tomato sauce slowly."
+	updated := "# Field Notes\n\nThe owl nests at dawn."
 	updatedTs := m.UpdatedTs + 100
 	require.NoError(t, fixture.store.UpdateMemo(ctx, &store.UpdateMemo{ID: m.ID, Content: &updated, UpdatedTs: &updatedTs}))
 	fixture.service.RunOnce(ctx)
@@ -244,13 +244,13 @@ func TestSemanticPathDropsStaleMatchesUntilReindexed(t *testing.T) {
 	// In the interim the semantic path must not serve the stale chunks: the
 	// meaning-based query matches nothing instead of ranking on outdated
 	// vectors.
-	matches, _, err := NewSemanticSearcher(fixture.store, embedModelFactory(model)).Search(ctx, "nocturnal predator")
+	matches, _, err := NewSemanticSearcher(fixture.store, embedModelFactory(model)).Search(ctx, "nocturnal predator", semanticScanBudgets{})
 	require.NoError(t, err)
 	require.Empty(t, matches)
 
 	// Once the runner catches up, the fresh chunks serve the query.
 	require.NoError(t, indexer.RunOnce(ctx))
-	matches, _, err = NewSemanticSearcher(fixture.store, embedModelFactory(model)).Search(ctx, "nocturnal predator")
+	matches, _, err = NewSemanticSearcher(fixture.store, embedModelFactory(model)).Search(ctx, "nocturnal predator", semanticScanBudgets{})
 	require.NoError(t, err)
 	require.NotEmpty(t, matches)
 	require.Equal(t, m.ID, matches[0].memoID)

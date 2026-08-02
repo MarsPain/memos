@@ -14,10 +14,11 @@ import (
 
 // TestDefaultBudgetsMatchSpecDefaults pins the retrieval budget defaults to
 // the values the product spec records (1,024 query characters, 32 MB scan,
-// 200 candidates, 20 results, 5-second wall clock) plus the implementation
-// budgets derived from them (32 query words, 100-document scan batches), so
-// none of them drifts silently. If a benchmark-driven tightening changes a
-// default, change the spec and this fixture together.
+// 200 candidates, 20 results, 5-second wall clock, 128 MB of chunk vector
+// bytes per semantic scan, one bounded query embedding call) plus the
+// implementation budgets derived from them (32 query words, 100-document
+// scan batches), so none of them drifts silently. If a benchmark-driven
+// tightening changes a default, change the spec and this fixture together.
 func TestDefaultBudgetsMatchSpecDefaults(t *testing.T) {
 	budgets := DefaultBudgets()
 	require.Equal(t, 1024, budgets.MaxQueryRunes)
@@ -27,6 +28,8 @@ func TestDefaultBudgetsMatchSpecDefaults(t *testing.T) {
 	require.Equal(t, 200, budgets.MaxCandidates)
 	require.Equal(t, 20, budgets.MaxResults)
 	require.Equal(t, 5*time.Second, budgets.WallClock)
+	require.Equal(t, 128<<20, budgets.MaxSemanticScanBytes)
+	require.Equal(t, 2*time.Second, budgets.EmbeddingTimeout)
 }
 
 // TestSearchQueryTruncationAtSpecDefaults proves the spec's 1,024-character
